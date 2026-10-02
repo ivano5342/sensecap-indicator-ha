@@ -92,7 +92,18 @@ struct sensor_data_minmax {
     X(SCD41_SENSOR_CO2,      "SCD41_CO2")         \
     X(SGP40_SENSOR_TVOC,     "SGP40_TVOC")        \
     X(SHT41_SENSOR_TEMP,     "SHT41_TEMP")        \
-    X(SHT41_SENSOR_HUMIDITY, "SHT41_HUMIDITY")
+    X(SHT41_SENSOR_HUMIDITY, "SHT41_HUMIDITY")    \
+    X(NETWORK_SENSOR_PM1_0_A, "NET_PM1_0_A")      \
+    X(NETWORK_SENSOR_PM2_5_A, "NET_PM2_5_A")      \
+    X(NETWORK_SENSOR_PM10_0_A, "NET_PM10_0_A")    \
+    X(NETWORK_SENSOR_PM25_AQI_A, "NET_PM25_AQI_A")\
+    X(NETWORK_SENSOR_AQI_COLOR_A, "NET_AQI_CLR_A")\
+    X(NETWORK_SENSOR_GAS_A, "NET_GAS_A")          \
+    X(NETWORK_SENSOR_PM1_0_B, "NET_PM1_0_B")      \
+    X(NETWORK_SENSOR_PM2_5_B, "NET_PM2_5_B")      \
+    X(NETWORK_SENSOR_PM10_0_B, "NET_PM10_0_B")    \
+    X(NETWORK_SENSOR_PM25_AQI_B, "NET_PM25_AQI_B")\
+    X(NETWORK_SENSOR_AQI_COLOR_B, "NET_AQI_CLR_B")
 
 #define X(type, str) type,
 enum sensor_data_type {
@@ -103,6 +114,10 @@ enum sensor_data_type {
 struct view_data_sensor_data {
     enum sensor_data_type sensor_type;
     float                 value;
+};
+
+struct view_data_network_sensor_stale {
+    bool is_stale;
 };
 
 struct view_data_sensor_history_data {
@@ -211,6 +226,14 @@ enum {
     /* P: ha/ha_sensor.c  C: *** NO CONSUMER — not yet wired up ***
      * Payload: struct view_data_ha_sensor_data */
     VIEW_EVENT_HA_SENSOR,
+
+    /* P: sensor/network_sensor_model.c  C: sensor/network_sensor_view.c
+     * Payload: struct view_data_sensor_data (reuses sensor data struct) */
+    VIEW_EVENT_NETWORK_SENSOR_DATA,
+
+    /* P: sensor/network_sensor_model.c  C: sensor/network_sensor_view.c
+     * Payload: struct view_data_network_sensor_stale */
+    VIEW_EVENT_NETWORK_SENSOR_STALE,
 
     /* P: ha/ha_switch_screen.c  C: ha/ha_switch.c  Payload: struct view_data_ha_switch_data */
     VIEW_EVENT_HA_SWITCH_ST,
