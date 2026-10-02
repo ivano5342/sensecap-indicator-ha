@@ -1,5 +1,6 @@
 #include "wifi.h"
 #include "indicator_enabler.h"
+#include "network_sensor_model.h"
 
 int indicator_model_init(void) {
 #ifdef STORAGE_NVS_H
@@ -48,4 +49,9 @@ int indicator_model_init(void) {
 #ifdef INDICATOR_TERMINAL_H
 	indicator_terminal_init();
 #endif
+
+#ifdef NETWORK_SENSOR_MODEL_H
+	network_sensor_model_init(view_event_handle);
+#endif
+
 }
