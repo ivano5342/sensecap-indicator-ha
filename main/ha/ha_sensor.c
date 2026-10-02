@@ -130,7 +130,7 @@ int ha_sensor_on_mqtt_data(const char *topic, int topic_len, const char *data, i
                  *      Store each label keyed by card index (cf. the switch_slot_t
                  *      pattern).
                  *   2. Register a VIEW_EVENT_HA_SENSOR handler that, under the LVGL
-                 *      lock, does lv_label_set_text(labels[data->index], data->value).
+                 *      lock, sets the label text from labels[data->index] and data->value.
                  *   3. Make sensor_data.index here map to the intended card slot.
                  */
                 esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_HA_SENSOR, &sensor_data, sizeof(sensor_data), portMAX_DELAY);
