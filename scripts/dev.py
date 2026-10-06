@@ -73,14 +73,28 @@ def ensure_pio() -> None:
 
 # --- runners -----------------------------------------------------------------
 
+def win32_command(cmd: list[str]) -> list[str]:
+    if not sys.platform.startswith("win"):
+        return cmd
+    exe = shutil.which(cmd[0])
+    if not exe:
+        return cmd
+    suffix = Path(exe).suffix.lower()
+    if suffix in {".py", ".pyw"}:
+        return [sys.executable, exe, *cmd[1:]]
+    if suffix in {".bat", ".cmd"}:
+        return ["cmd.exe", "/c", exe, *cmd[1:]]
+    return cmd
+
+
 def run_idf(idf_args: list[str]) -> int:
-    cmd = ["idf.py", *idf_args]
+    cmd = win32_command(["idf.py", *idf_args])
     print("$ " + " ".join(cmd), flush=True)
     return subprocess.run(cmd, cwd=ROOT).returncode
 
 
 def run_idf_capture(idf_args: list[str]) -> subprocess.CompletedProcess[str]:
-    cmd = ["idf.py", *idf_args]
+    cmd = win32_command(["idf.py", *idf_args])
     print("$ " + " ".join(cmd), flush=True)
     proc = subprocess.Popen(
         cmd,
