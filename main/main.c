@@ -53,7 +53,7 @@ void app_main(void) {
 	lv_port_init();
 
 	esp_event_loop_args_t view_event_task_args = {
-		.queue_size = 10,
+		.queue_size = 32, // one network sensor poll alone posts 11 events
 		.task_name = "view_event_task",
 		.task_priority = uxTaskPriorityGet(NULL),
 		.task_stack_size = 10240,

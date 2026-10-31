@@ -131,10 +131,9 @@ static void _sleep_mode_timer_callback(void* arg) {
 	_lcd_bl_off();
 	_timer_st_set(false);
 
+	// Runs on the esp_timer task, which also polls the button: must not block.
 	bool st = 0;
-	st = 0;
-	esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_SCREEN_CTRL, &st, sizeof(st),
-					  portMAX_DELAY);
+	esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_SCREEN_CTRL, &st, sizeof(st), 0);
 }
 
 static void _timer_stop(void) {

@@ -34,6 +34,11 @@ static void _factory_reset_callback(void *arg) {
     esp_restart();
 }
 
+/*
+ * Button callbacks run on the esp_timer task, which also polls the button. They
+ * post with no wait and switch the backlight before posting, so a stuck view
+ * event loop can never leave the screen dark with a dead button.
+ */
 static void _btn_click_callback(void *arg) {
     bool st = 0;
     if (sleep_flag) {
@@ -47,13 +52,13 @@ static void _btn_click_callback(void *arg) {
         indicator_display_off();
         st = 0;
         esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_SCREEN_CTRL, &st,
-                          sizeof(st), portMAX_DELAY);
+                          sizeof(st), 0);
     } else {
         ESP_LOGI(TAG, "click, on");
+        indicator_display_on();
         st = 1;
         esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_SCREEN_CTRL, &st,
-                          sizeof(st), portMAX_DELAY);
-        indicator_display_on();
+                          sizeof(st), 0);
     }
 }
 
@@ -82,17 +87,17 @@ static void _btn_long_press_hold_callback(void *arg) {
             indicator_display_off();
             bool st = 0;
             esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_SCREEN_CTRL, &st,
-                              sizeof(st), portMAX_DELAY);
+                              sizeof(st), 0);
         }
     } else if (hold_cnt >= 10000 && !factory_reset_flag) {
         ESP_LOGI(TAG, "factory reset");
         factory_reset_flag = true;
         esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_FACTORY_RESET, NULL, 0,
-                          portMAX_DELAY);
+                          0);
+        indicator_display_on();
         bool st = 1;
         esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_SCREEN_CTRL, &st,
-                          sizeof(st), portMAX_DELAY);
-        indicator_display_on();
+                          sizeof(st), 0);
 
         const esp_timer_create_args_t timer_args = {
             .callback = &_factory_reset_callback,
@@ -109,7 +114,7 @@ static void _btn_press_up_callback(void *arg) {
         ESP_LOGI(TAG, "entry sleep mode");
         sleep_flag = true;
         esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_SHUTDOWN, NULL, 0,
-                          portMAX_DELAY);
+                          0);
     }
 }
 

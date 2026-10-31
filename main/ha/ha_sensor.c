@@ -133,7 +133,14 @@ int ha_sensor_on_mqtt_data(const char *topic, int topic_len, const char *data, i
                  *      lock, sets the label text from labels[data->index] and data->value.
                  *   3. Make sensor_data.index here map to the intended card slot.
                  */
-                esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_HA_SENSOR, &sensor_data, sizeof(sensor_data), portMAX_DELAY);
+                /*
+                 * Runs in mqtt_task, which holds the MQTT client lock. Never wait for
+                 * view queue space here: view_event_task may itself be waiting for that
+                 * lock in esp_mqtt_client_publish, and the two would deadlock.
+                 */
+                if (esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_HA_SENSOR, &sensor_data, sizeof(sensor_data), 0) != ESP_OK) {
+                    ESP_LOGW(TAG, "view queue full, dropped sensor %s", ha_sensor_entities[i].key);
+                }
                 cJSON_Delete(root);
                 return 0;
             }

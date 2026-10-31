@@ -179,7 +179,10 @@ int ha_switch_on_mqtt_data(const char *topic, int topic_len, const char *data, i
             if (cjson_item != NULL && cJSON_IsNumber(cjson_item)) {
                 struct view_data_ha_switch_data switch_data = {.index = i, .value = cjson_item->valueint};
                 ESP_LOGI(TAG, "MQTT message: %s set to %d", ha_switch_entities[i].key, switch_data.value);
-                esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_HA_SWITCH_SET, &switch_data, sizeof(switch_data), portMAX_DELAY);
+                /* Runs in mqtt_task holding the MQTT client lock: must not block (see ha_sensor.c). */
+                if (esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_HA_SWITCH_SET, &switch_data, sizeof(switch_data), 0) != ESP_OK) {
+                    ESP_LOGW(TAG, "view queue full, dropped %s set", ha_switch_entities[i].key);
+                }
                 cJSON_Delete(root);
                 return 0;
             }
