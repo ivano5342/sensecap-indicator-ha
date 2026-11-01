@@ -161,7 +161,7 @@ static bool _poll_once(const char *url) {
     int rssi = (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) ? ap.rssi : 0;
     bool ok = false;
     if (ret != ESP_OK) {
-        /* The sensor stalls for 20-30 s at a time; a timeout is expected, anything else is not */
+        /* The sensor stalls ~36 s every 120 s; a timeout is expected, anything else is not */
         if (ret == ESP_ERR_HTTP_EAGAIN || ret == ESP_ERR_TIMEOUT) {
             ESP_LOGW(TAG, "HTTP request timed out: %s (%d ms, rssi=%d, heap=%u)",
                      esp_err_to_name(ret), ms, rssi, (unsigned)esp_get_free_heap_size());

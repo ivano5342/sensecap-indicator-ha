@@ -13,8 +13,8 @@ extern "C" {
 #define NETWORK_SENSOR_PORT 80
 #define NETWORK_SENSOR_PATH         "/json?live=true"          // HTTP GET path
 #define NETWORK_SENSOR_POLL_INTERVAL_SEC 10          // Poll every 10 seconds
-#define NETWORK_SENSOR_HTTP_TIMEOUT_MS   2000        // Healthy replies take <~0.4 s; the sensor stalls for 20-30 s at a time
-#define NETWORK_SENSOR_STALE_AFTER_SEC   90          // Longest observed stall run is ~48 s; no good poll for this long -> stale
+#define NETWORK_SENSOR_HTTP_TIMEOUT_MS   2000        // Healthy replies take <~0.4 s; the sensor stalls ~36 s every 120 s
+#define NETWORK_SENSOR_STALE_AFTER_SEC   90          // Stalls run ~36 s, at most ~54 s seen; no good poll for this long -> stale
 
 /* ── JSON Field Mapping ──────────────────────────────────────────────────── */
 
