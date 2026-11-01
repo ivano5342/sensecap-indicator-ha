@@ -379,8 +379,8 @@ static void _indicator_wifi_task(void* p_arg) {
 /*
  * Wi-Fi scans for the list screen. Not on view_event_task: a scan blocks for seconds, and the
  * result is posted to the view queue, which only view_event_task drains. Posting from there with
- * the queue full would wait forever (likely cause of the Wi-Fi screen freeze, 2026-10-07). From
- * this task a full queue only delays the list.
+ * the queue full would wait forever. From this task a full queue only delays the list. This is
+ * hardening: the Wi-Fi screen freeze of 2026-10-07 was LVGL running out of memory, not this.
  */
 static void _wifi_scan_task(void* p_arg) {
 	static wifi_ap_record_t ap_info[WIFI_SCAN_LIST_SIZE];
