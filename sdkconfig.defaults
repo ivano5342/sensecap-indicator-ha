@@ -86,3 +86,8 @@ CONFIG_LV_FONT_MONTSERRAT_46=y
 CONFIG_LV_FONT_MONTSERRAT_48=y
 
 CONFIG_LV_SPRINTF_USE_FLOAT=y
+
+# Save a core dump (every task's stack) to the coredump partition on a panic; the `crash` console
+# command triggers one to capture a frozen state. Read it with `idf.py coredump-info`.
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y

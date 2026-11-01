@@ -2,6 +2,10 @@
 #include "esp_log.h"
 #include "argtable3/argtable3.h"
 #include "esp_console.h"
+#include "esp_core_dump.h"
+#include "esp_debug_helpers.h"
+#include "esp_heap_caps.h"
+#include "esp_timer.h"
 
 #include "home_assistant_config.h"
 #include "ha.h"
@@ -9,6 +13,7 @@
 #include "indicator_util.h"
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -89,6 +94,63 @@ static void register_mqtt_help(void) {
         .func    = &mqtt_help,
     };
     ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
+}
+
+/* Print every task's backtrace, to find which task is blocked and where.
+ * idf.py monitor decodes the addresses when it has the matching ELF.
+ * It parks the other CPU while printing, and in a freeze it can hang there (2026-10-07):
+ * prefer `crash`, which saves every task to the core dump. */
+static int dump_tasks(int argc, char **argv) {
+    printf("Uptime %lld s, %u tasks, free heap %u (internal %u)\n",
+           esp_timer_get_time() / 1000000, (unsigned)uxTaskGetNumberOfTasks(),
+           (unsigned)esp_get_free_heap_size(),
+           (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+    fflush(stdout);
+    if (esp_backtrace_print_all_tasks(16) != ESP_OK) {
+        printf("One or more backtraces are corrupt\n");
+    }
+    return 0;
+}
+
+static void register_dump_tasks(void) {
+    const esp_console_cmd_t cmd = {
+        .command = "tasks",
+        .help    = "Print the backtrace of every task (may hang in a freeze; see crash)",
+        .hint    = NULL,
+        .func    = &dump_tasks,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
+}
+
+/* Abort on purpose: the panic handler saves every task's stack to the coredump partition, then
+ * the device reboots. Use it on a frozen device; read the dump with `idf.py coredump-info`. */
+static int crash_for_coredump(int argc, char **argv) {
+    printf("Aborting to save a core dump; the device will reboot.\n");
+    fflush(stdout);
+    abort();
+    return 0;
+}
+
+static void register_crash(void) {
+    const esp_console_cmd_t cmd = {
+        .command = "crash",
+        .help    = "Reboot via a panic that saves a core dump of every task (debug a freeze)",
+        .hint    = NULL,
+        .func    = &crash_for_coredump,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
+}
+
+static void report_saved_coredump(void) {
+    esp_core_dump_summary_t *summary = malloc(sizeof(esp_core_dump_summary_t));
+    if (summary == NULL) {
+        return;
+    }
+    if (esp_core_dump_image_check() == ESP_OK && esp_core_dump_get_summary(summary) == ESP_OK) {
+        ESP_LOGW(TAG, "Core dump saved from an earlier crash (task %s). Read it: idf.py coredump-info",
+                 summary->exc_task);
+    }
+    free(summary);
 }
 
 struct {
@@ -187,6 +249,9 @@ int indicator_cmd_init(void) {
     register_read_config();
     register_mqtt_help();
     register_mqtt_config();
+    register_dump_tasks();
+    register_crash();
+    report_saved_coredump();
 
     esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_console_new_repl_uart(&hw_config, &repl_config, &repl));
