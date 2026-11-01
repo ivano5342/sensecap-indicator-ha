@@ -29,6 +29,7 @@ static struct indicator_wifi _g_wifi_model;
 static SemaphoreHandle_t _g_wifi_mutex;
 static SemaphoreHandle_t _g_data_mutex;
 static SemaphoreHandle_t _g_net_check_sem;
+static SemaphoreHandle_t _g_scan_req_sem;
 
 static int s_retry_num = 0;
 static int wifi_retry_max = 3;
@@ -63,12 +64,17 @@ static void _wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t 
 			struct view_data_wifi_st st;
 			st.is_connected = false;
 			st.is_network = false;
-			st.is_connecting = true;
+			st.is_connecting = _g_wifi_model.is_cfg;
 			memset(st.ssid, 0, sizeof(st.ssid));
 			st.rssi = 0;
 			_wifi_st_set(&st);
 
-			esp_wifi_connect();
+			// Nothing to connect to without a saved network (fresh device, or after Delete); a connect
+			// attempt would only fail and could block the list screen's scan.
+			if(_g_wifi_model.is_cfg)
+			{
+				esp_wifi_connect();
+			}
 			break;
 		}
 		case WIFI_EVENT_STA_CONNECTED:
@@ -143,11 +149,23 @@ static void _ip_event_handler(void* arg, esp_event_base_t event_base, int32_t ev
 }
 
 static int _wifi_scan(wifi_ap_record_t* p_ap_info, uint16_t number) {
-	uint16_t ap_count;
-	esp_wifi_scan_start(NULL, true);
-
-	ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&ap_count));
-	ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, p_ap_info));
+	uint16_t ap_count = 0;
+	// Runs on the scan task, so Wi-Fi can be stopped or reconfigured mid-scan: report an empty list, don't abort.
+	esp_err_t err = esp_wifi_scan_start(NULL, true);
+	if(err == ESP_OK)
+	{
+		err = esp_wifi_scan_get_ap_num(&ap_count);
+	}
+	if(err == ESP_OK)
+	{
+		err = esp_wifi_scan_get_ap_records(&number, p_ap_info);
+	}
+	if(err != ESP_OK)
+	{
+		ESP_LOGW(TAG, "wifi scan failed: %s", esp_err_to_name(err));
+		esp_wifi_clear_ap_list();
+		return 0;
+	}
 	ESP_LOGI(TAG, "Total APs scanned = %u, actual AP number ap_info holds = %u", ap_count, number);
 
 	for(int i = 0; (i < number) && (i < ap_count); i++)
@@ -203,10 +221,26 @@ static void _wifi_cfg_restore(void) {
 	st.is_network = false;
 	_wifi_st_set(&st);
 
-	esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_ST, &st, sizeof(struct view_data_wifi_st),
-					  portMAX_DELAY);
+	// Runs on view_event_task: waiting for space in its own queue would never end.
+	if(esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_ST, &st, sizeof(struct view_data_wifi_st),
+						 0) != ESP_OK)
+	{
+		ESP_LOGW(TAG, "view queue full, dropped wifi state");
+	}
 
 	esp_wifi_restore();
+
+	// esp_wifi_restore() stops Wi-Fi. Start it again unconfigured, as at boot with no saved network, so the
+	// list screen can scan and the user can pick a new network.
+	esp_err_t err = esp_wifi_set_mode(WIFI_MODE_STA);
+	if(err == ESP_OK)
+	{
+		err = esp_wifi_start();
+	}
+	if(err != ESP_OK)
+	{
+		ESP_LOGW(TAG, "wifi restart after config delete failed: %s", esp_err_to_name(err));
+	}
 }
 
 static void _wifi_shutdown(void) {
@@ -218,8 +252,12 @@ static void _wifi_shutdown(void) {
 	st.is_network = false;
 	_wifi_st_set(&st);
 
-	esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_ST, &st, sizeof(struct view_data_wifi_st),
-					  portMAX_DELAY);
+	// Runs on view_event_task: waiting for space in its own queue would never end.
+	if(esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_ST, &st, sizeof(struct view_data_wifi_st),
+						 0) != ESP_OK)
+	{
+		ESP_LOGW(TAG, "view queue full, dropped wifi state");
+	}
 
 	esp_wifi_stop();
 }
@@ -339,61 +377,76 @@ static void _indicator_wifi_task(void* p_arg) {
 	}
 }
 
+/*
+ * Wi-Fi scans for the list screen. Not on view_event_task: a scan blocks for seconds, and the
+ * result is posted to the view queue, which only view_event_task drains. Posting from there with
+ * the queue full would wait forever (likely cause of the Wi-Fi screen freeze, 2026-10-07). From
+ * this task a full queue only delays the list.
+ */
+static void _wifi_scan_task(void* p_arg) {
+	static wifi_ap_record_t ap_info[WIFI_SCAN_LIST_SIZE];
+	static struct view_data_wifi_list list;
+
+	while(1)
+	{
+		xSemaphoreTake(_g_scan_req_sem, portMAX_DELAY);
+
+		uint16_t number = WIFI_SCAN_LIST_SIZE;
+		uint16_t ap_count = 0;
+		ap_count = _wifi_scan(ap_info, number);
+
+		struct view_data_wifi_st st;
+
+		memset(&list, 0, sizeof(struct view_data_wifi_list));
+
+		_wifi_st_get(&st);
+
+		list.is_connect = st.is_connected;
+		if(st.is_connected)
+		{
+			strlcpy((char*)list.connect.ssid, (char*)st.ssid, sizeof(list.connect.ssid));
+			list.connect.auth_mode = false;
+			list.connect.rssi = st.rssi;
+		}
+
+		ap_count = min(number, ap_count);
+
+		bool is_exist = false;
+		int list_cnt = 0;
+		for(int i = 0; i < ap_count; i++)
+		{
+			is_exist = false;
+			for(int j = 0; j < list_cnt; j++)
+			{
+				if(strcmp(list.aps[j].ssid, ap_info[i].ssid) == 0)
+				{
+					ESP_LOGI(TAG, "list exit ap:%s", ap_info[i].ssid);
+					is_exist = true;
+					break;
+				}
+			}
+			if(!is_exist)
+			{
+				strcpy(list.aps[list_cnt].ssid, ap_info[i].ssid);
+				list.aps[list_cnt].rssi = ap_info[i].rssi;
+				list.aps[list_cnt].auth_mode = (ap_info[i].authmode != WIFI_AUTH_OPEN);
+				list_cnt++;
+			}
+		}
+		list.cnt = list_cnt;
+		esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_LIST, &list,
+						  sizeof(struct view_data_wifi_list), portMAX_DELAY);
+	}
+}
+
 static void _view_event_handler(void* handler_args, esp_event_base_t base, int32_t id, void* event_data) {
 	switch(id)
 	{
 		case VIEW_EVENT_WIFI_LIST_REQ:
 		{
 			ESP_LOGI(TAG, "event: VIEW_EVENT_WIFI_LIST_REQ");
-
-			uint16_t number = WIFI_SCAN_LIST_SIZE;
-			uint16_t ap_count = 0;
-			wifi_ap_record_t ap_info[WIFI_SCAN_LIST_SIZE];
-			ap_count = _wifi_scan(ap_info, number);
-
-			struct view_data_wifi_list list;
-			struct view_data_wifi_st st;
-
-			memset(&list, 0, sizeof(struct view_data_wifi_list));
-
-			_wifi_st_get(&st);
-
-			list.is_connect = st.is_connected;
-			if(st.is_connected)
-			{
-				strlcpy((char*)list.connect.ssid, (char*)st.ssid, sizeof(list.connect.ssid));
-				list.connect.auth_mode = false;
-				list.connect.rssi = st.rssi;
-			}
-
-			ap_count = min(number, ap_count);
-
-			bool is_exist = false;
-			int list_cnt = 0;
-			for(int i = 0; i < ap_count; i++)
-			{
-				is_exist = false;
-				for(int j = 0; j < list_cnt; j++)
-				{
-					if(strcmp(list.aps[j].ssid, ap_info[i].ssid) == 0)
-					{
-						ESP_LOGI(TAG, "list exit ap:%s", ap_info[i].ssid);
-						is_exist = true;
-						break;
-					}
-				}
-				if(!is_exist)
-				{
-					strcpy(list.aps[list_cnt].ssid, ap_info[i].ssid);
-					list.aps[list_cnt].rssi = ap_info[i].rssi;
-					list.aps[list_cnt].auth_mode = (ap_info[i].authmode != WIFI_AUTH_OPEN);
-					list_cnt++;
-				}
-			}
-			list.cnt = list_cnt;
-			esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_LIST, &list,
-							  sizeof(struct view_data_wifi_list), portMAX_DELAY);
-
+			// The scan takes seconds; do it on the scan task so view_event_task keeps draining its queue.
+			xSemaphoreGive(_g_scan_req_sem);
 			break;
 		}
 		case VIEW_EVENT_WIFI_CONNECT:
@@ -432,10 +485,12 @@ int indicator_wifi_model_init(void) {
 	_g_wifi_mutex = xSemaphoreCreateMutex();
 	_g_data_mutex = xSemaphoreCreateMutex();
 	_g_net_check_sem = xSemaphoreCreateBinary();
+	_g_scan_req_sem = xSemaphoreCreateBinary();
 
 	memset(&_g_wifi_model, 0, sizeof(_g_wifi_model));
 
 	xTaskCreate(&_indicator_wifi_task, "_indicator_wifi_task", 1024 * 5, NULL, 10, NULL);
+	xTaskCreate(&_wifi_scan_task, "wifi_scan_task", 1024 * 4, NULL, 5, NULL);
 
 	ESP_ERROR_CHECK(esp_netif_init());
 	ESP_ERROR_CHECK(esp_event_loop_create_default());

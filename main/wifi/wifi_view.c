@@ -16,7 +16,6 @@ LV_IMAGE_DECLARE(ui_img_wifi_disconet_png);
 static const char *TAG = "wifi-view";
 
 static wifi_list_screen_t    *s_list_screen    = NULL;
-static wifi_connect_screen_t *s_connect_screen = NULL;
 static lv_obj_t              *s_wifi_modal     = NULL;
 static lv_obj_t              *s_wifi_spinner   = NULL;
 static lv_obj_t              *s_wifi_icon      = NULL;
@@ -34,10 +33,7 @@ static bool s_discard_next_list = false;
 static bool s_wifi_scan_pending = false;
 
 static void _hide_wifi_modal(void) {
-    if(s_connect_screen) {
-        wifi_connect_screen_dismiss(s_connect_screen);
-        s_connect_screen = NULL;
-    }
+    wifi_connect_screen_dismiss_open();
     if(s_wifi_modal) {
         lv_obj_add_flag(s_wifi_modal, LV_OBJ_FLAG_HIDDEN);
         if(s_wifi_scan_pending) {
@@ -161,22 +157,22 @@ static void _ensure_wifi_status_icon(void) {
 static void _on_unconnected_tap(lv_event_t *e) {
     if(lv_event_get_code(e) != LV_EVENT_CLICKED) return;
     if(lv_indev_get_type(lv_indev_active()) != LV_INDEV_TYPE_POINTER) return;
-    if(s_connect_screen != NULL) return; /* dialog already open */
+    if(wifi_connect_screen_is_open()) return;
 
     lv_obj_t *btn = lv_event_get_target_obj(e);
     const char *ssid = wifi_list_screen_get_item_ssid(s_list_screen, btn);
     bool have_password = (lv_obj_get_child_cnt(btn) > 2);
-    s_connect_screen = wifi_connect_screen_show(ssid, have_password);
+    wifi_connect_screen_show(ssid, have_password);
 }
 
 static void _on_connected_tap(lv_event_t *e) {
     if(lv_event_get_code(e) != LV_EVENT_CLICKED) return;
     if(lv_indev_get_type(lv_indev_active()) != LV_INDEV_TYPE_POINTER) return;
-    if(s_connect_screen != NULL) return;
+    if(wifi_connect_screen_is_open()) return;
 
     lv_obj_t *btn = lv_event_get_target_obj(e);
     const char *ssid = wifi_list_screen_get_item_ssid(s_list_screen, btn);
-    s_connect_screen = wifi_details_screen_show(ssid);
+    wifi_details_screen_show(ssid);
 }
 
 /* ── connection result toast ─────────────────────────────────────────── */
@@ -255,7 +251,6 @@ static void _view_event_handler(void *handler_args, esp_event_base_t base,
             lv_port_sem_take();
             _ensure_wifi_modal();
             wifi_list_screen_show_spinner(s_list_screen);
-            s_connect_screen = NULL; /* already dismissed by connect_screen itself */
             lv_port_sem_give();
             break;
 
@@ -291,9 +286,12 @@ static void _view_event_handler(void *handler_args, esp_event_base_t base,
             lv_port_sem_give();
             if(!modal_visible) break;
 
-            /* Refresh list then show result toast. */
-            esp_event_post_to(view_event_handle, VIEW_EVENT_BASE,
-                              VIEW_EVENT_WIFI_LIST_REQ, NULL, 0, portMAX_DELAY);
+            /* Refresh list then show result toast. Runs on view_event_task: never wait for
+             * space in its own queue (that would never end). */
+            if(esp_event_post_to(view_event_handle, VIEW_EVENT_BASE,
+                                 VIEW_EVENT_WIFI_LIST_REQ, NULL, 0, 0) != ESP_OK) {
+                ESP_LOGW(TAG, "view queue full, dropped wifi list refresh");
+            }
 
             lv_port_sem_take();
             _show_connect_result(p_data);

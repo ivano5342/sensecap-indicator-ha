@@ -18,10 +18,15 @@ struct wifi_connect_screen {
     bool       password_ready;
 };
 
+/* The one open dialog, or NULL. Its buttons free it on close, so callers must not keep the
+ * pointer: Back after Cancel dismissed a freed dialog and crashed (2026-10-07). */
+static wifi_connect_screen_t *s_open = NULL;
+
 /* ── internal helpers ─────────────────────────────────────────────────── */
 
 static void _dismiss(wifi_connect_screen_t *s) {
-    if(!s) return;
+    if(!s || s != s_open) return; /* already dismissed */
+    s_open = NULL;
     if(s->kb) {
         lv_obj_delete(s->kb);
         s->kb = NULL;
@@ -111,8 +116,10 @@ static void _on_delete(lv_event_t *e) {
 /* ── public API ───────────────────────────────────────────────────────── */
 
 wifi_connect_screen_t *wifi_connect_screen_show(const char *ssid, bool have_password) {
+    if(s_open) return NULL;
     wifi_connect_screen_t *s = calloc(1, sizeof(wifi_connect_screen_t));
     if(!s) return NULL;
+    s_open = s;
     strncpy(s->ssid, ssid, sizeof(s->ssid));
 
     lv_obj_add_flag(lv_layer_top(), LV_OBJ_FLAG_CLICKABLE);
@@ -187,8 +194,10 @@ wifi_connect_screen_t *wifi_connect_screen_show(const char *ssid, bool have_pass
 }
 
 wifi_connect_screen_t *wifi_details_screen_show(const char *ssid) {
+    if(s_open) return NULL;
     wifi_connect_screen_t *s = calloc(1, sizeof(wifi_connect_screen_t));
     if(!s) return NULL;
+    s_open = s;
     strncpy(s->ssid, ssid, sizeof(s->ssid));
 
     lv_obj_add_flag(lv_layer_top(), LV_OBJ_FLAG_CLICKABLE);
@@ -237,4 +246,12 @@ wifi_connect_screen_t *wifi_details_screen_show(const char *ssid) {
 
 void wifi_connect_screen_dismiss(wifi_connect_screen_t *s) {
     _dismiss(s);
+}
+
+bool wifi_connect_screen_is_open(void) {
+    return s_open != NULL;
+}
+
+void wifi_connect_screen_dismiss_open(void) {
+    _dismiss(s_open);
 }
