@@ -28,6 +28,8 @@ def main() -> int:
     args = parser.parse_args()
 
     run("Architecture scan", ["python3", "scripts/architecture_scan.py"])
+    run("sdkconfig vs defaults", ["python3", "scripts/check_sdkconfig.py"])
+    run("sdkconfig check tests", ["python3", "scripts/test_check_sdkconfig.py"])
     run("RGB LCD config", ["python3", "scripts/test_lcd_rgb_config.py"])
     run("UI geometry", ["python3", "scripts/test_ui_geometry.py"])
     run("Click deploy package", ["python3", "scripts/test_click_deploy_package.py"])

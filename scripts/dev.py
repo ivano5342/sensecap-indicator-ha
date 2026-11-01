@@ -32,6 +32,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import check_sdkconfig
+
 ROOT = Path(__file__).resolve().parent.parent
 BUILD_DIR = ROOT / "build"
 RP2040_DIR = ROOT / "rp2040"
@@ -107,7 +109,14 @@ def run_pio(pio_args: list[str]) -> int:
 
 # --- ESP32-S3 (default) ------------------------------------------------------
 
+def warn_stale_sdkconfig() -> None:
+    # Warn only: sdkconfig is never regenerated from sdkconfig.defaults, so a fix
+    # there can silently miss this machine. dev_check fails on the same mismatch.
+    check_sdkconfig.check(verbose=False)
+
+
 def cmd_build(args: argparse.Namespace) -> int:
+    warn_stale_sdkconfig()
     # Clean by default: wipe build/ before building (preserves prior behavior).
     # --no-clean opts into a faster incremental build.
     if not args.no_clean and BUILD_DIR.exists():
@@ -126,6 +135,7 @@ def is_idf_python_env_mismatch(output: str) -> bool:
 
 
 def cmd_flash(args: argparse.Namespace) -> int:
+    warn_stale_sdkconfig()
     idf_args: list[str] = []
     if args.port:
         idf_args += ["-p", args.port]
