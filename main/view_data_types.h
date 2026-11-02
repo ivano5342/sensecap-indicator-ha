@@ -103,7 +103,14 @@ struct sensor_data_minmax {
     X(NETWORK_SENSOR_PM2_5_B, "NET_PM2_5_B")      \
     X(NETWORK_SENSOR_PM10_0_B, "NET_PM10_0_B")    \
     X(NETWORK_SENSOR_PM25_AQI_B, "NET_PM25_AQI_B")\
-    X(NETWORK_SENSOR_AQI_COLOR_B, "NET_AQI_CLR_B")
+    X(NETWORK_SENSOR_AQI_COLOR_B, "NET_AQI_CLR_B")\
+    X(SEN66_SENSOR_PM1_0,    "SEN66_PM1_0")       \
+    X(SEN66_SENSOR_PM2_5,    "SEN66_PM2_5")       \
+    X(SEN66_SENSOR_PM4_0,    "SEN66_PM4_0")       \
+    X(SEN66_SENSOR_PM10_0,   "SEN66_PM10_0")      \
+    X(SEN66_SENSOR_VOC,      "SEN66_VOC")         \
+    X(SEN66_SENSOR_NOX,      "SEN66_NOX")         \
+    X(SEN66_SENSOR_CO2,      "SEN66_CO2")
 
 #define X(type, str) type,
 enum sensor_data_type {

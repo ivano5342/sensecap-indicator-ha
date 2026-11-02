@@ -47,6 +47,34 @@ static void publish_sensor_data(const struct view_data_sensor_data *sensor_data)
             key = CONFIG_SENSOR_BUILDIN_HUMIDITY_VALUE_KEY;
             len = snprintf(data_buf, sizeof(data_buf), "{\"%s\":\"%d\"}", key, (int)sensor_data->value);
             break;
+        case SEN66_SENSOR_PM1_0:
+            key = CONFIG_SENSOR_SEN66_PM1_0_VALUE_KEY;
+            len = snprintf(data_buf, sizeof(data_buf), "{\"%s\":\"%.1f\"}", key, sensor_data->value);
+            break;
+        case SEN66_SENSOR_PM2_5:
+            key = CONFIG_SENSOR_SEN66_PM2_5_VALUE_KEY;
+            len = snprintf(data_buf, sizeof(data_buf), "{\"%s\":\"%.1f\"}", key, sensor_data->value);
+            break;
+        case SEN66_SENSOR_PM4_0:
+            key = CONFIG_SENSOR_SEN66_PM4_0_VALUE_KEY;
+            len = snprintf(data_buf, sizeof(data_buf), "{\"%s\":\"%.1f\"}", key, sensor_data->value);
+            break;
+        case SEN66_SENSOR_PM10_0:
+            key = CONFIG_SENSOR_SEN66_PM10_0_VALUE_KEY;
+            len = snprintf(data_buf, sizeof(data_buf), "{\"%s\":\"%.1f\"}", key, sensor_data->value);
+            break;
+        case SEN66_SENSOR_VOC:
+            key = CONFIG_SENSOR_SEN66_VOC_VALUE_KEY;
+            len = snprintf(data_buf, sizeof(data_buf), "{\"%s\":\"%d\"}", key, (int)sensor_data->value);
+            break;
+        case SEN66_SENSOR_NOX:
+            key = CONFIG_SENSOR_SEN66_NOX_VALUE_KEY;
+            len = snprintf(data_buf, sizeof(data_buf), "{\"%s\":\"%d\"}", key, (int)sensor_data->value);
+            break;
+        case SEN66_SENSOR_CO2:
+            key = CONFIG_SENSOR_SEN66_CO2_VALUE_KEY;
+            len = snprintf(data_buf, sizeof(data_buf), "{\"%s\":\"%d\"}", key, (int)sensor_data->value);
+            break;
         default:
             ESP_LOGW(TAG, "Unknown sensor type: %d", sensor_data->sensor_type);
             return;
@@ -106,6 +134,13 @@ int ha_sensor_on_mqtt_data(const char *topic, int topic_len, const char *data, i
     }
 
     cJSON *c_key = root->child;
+
+    // The device receives its own SEN66 publishes back; nothing consumes them here.
+    if (strncmp(c_key->string, CONFIG_SENSOR_SEN66_KEY_PREFIX, strlen(CONFIG_SENSOR_SEN66_KEY_PREFIX)) == 0) {
+        cJSON_Delete(root);
+        return 0;
+    }
+
     ESP_LOGI(TAG, "c_key = %s", c_key->string);
     size_t key_len = strlen(c_key->string);
 

@@ -42,6 +42,16 @@ extern "C" {
 #define CONFIG_SENSOR_BUILDIN_HUMIDITY_VALUE_KEY "humidity"
 #define CONFIG_SENSOR_BUILDIN_TOPIC_DATA         CONFIG_TOPIC_SENSOR_DATA
 
+// sen66 sensor, published on the buildin sensor topic
+#define CONFIG_SENSOR_SEN66_KEY_PREFIX           "sen66_"
+#define CONFIG_SENSOR_SEN66_PM1_0_VALUE_KEY      "sen66_pm1_0"
+#define CONFIG_SENSOR_SEN66_PM2_5_VALUE_KEY      "sen66_pm2_5"
+#define CONFIG_SENSOR_SEN66_PM4_0_VALUE_KEY      "sen66_pm4_0"
+#define CONFIG_SENSOR_SEN66_PM10_0_VALUE_KEY     "sen66_pm10_0"
+#define CONFIG_SENSOR_SEN66_VOC_VALUE_KEY        "sen66_voc"
+#define CONFIG_SENSOR_SEN66_NOX_VALUE_KEY        "sen66_nox"
+#define CONFIG_SENSOR_SEN66_CO2_VALUE_KEY        "sen66_co2"
+
 // sensor1
 #define CONFIG_SENSOR1_VALUE_KEY                 "temp"
 #define CONFIG_SENSOR1_UI_UNIT                   "°C"

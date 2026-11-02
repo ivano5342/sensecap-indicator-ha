@@ -171,8 +171,7 @@ void view_event_update_present_sensorData(void* handler_args, esp_event_base_t b
 	}
 	if(sensorPanel[p_data->sensor_type].ui_lbl == NULL)
 	{
-		ESP_LOGE(TAG, "SensePanel did't init completely");
-		return;
+		return; // this sensor type has no card on this tile
 	}
 	char data_buf[BUF_SIZE];
 

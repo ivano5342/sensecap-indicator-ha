@@ -167,6 +167,28 @@ int _sensor_data_parse_handle(uint8_t* p_data, ssize_t len) {
 			// ESP_LOGI(TAG, "PKT_TYPE_SENSOR_SHT41_HUMIDITY");
 			update_sensor_data(SHT41_SENSOR_HUMIDITY, (p_data + 1));
 			break;
+			/*SEN66*/
+		case PKT_TYPE_SENSOR_SEN66_PM1_0:
+			update_sensor_data(SEN66_SENSOR_PM1_0, (p_data + 1));
+			break;
+		case PKT_TYPE_SENSOR_SEN66_PM2_5:
+			update_sensor_data(SEN66_SENSOR_PM2_5, (p_data + 1));
+			break;
+		case PKT_TYPE_SENSOR_SEN66_PM4_0:
+			update_sensor_data(SEN66_SENSOR_PM4_0, (p_data + 1));
+			break;
+		case PKT_TYPE_SENSOR_SEN66_PM10_0:
+			update_sensor_data(SEN66_SENSOR_PM10_0, (p_data + 1));
+			break;
+		case PKT_TYPE_SENSOR_SEN66_VOC_INDEX:
+			update_sensor_data(SEN66_SENSOR_VOC, (p_data + 1));
+			break;
+		case PKT_TYPE_SENSOR_SEN66_NOX_INDEX:
+			update_sensor_data(SEN66_SENSOR_NOX, (p_data + 1));
+			break;
+		case PKT_TYPE_SENSOR_SEN66_CO2:
+			update_sensor_data(SEN66_SENSOR_CO2, (p_data + 1));
+			break;
 		default:
 			// Handle unknown packet type
 			break;
