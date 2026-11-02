@@ -19,7 +19,27 @@ https://files.seeedstudio.com/wiki/SenseCAP/SenseCAP_Indicator/grove.png
 
 PacketSerial packetSerial;
 
+static bool has_aht   = false;
 static bool has_sht41 = false;
+
+/************************ power requests  ****************************/
+
+// onPacketReceived() runs on core 1 and loop() on core 0, which owns Wire and the
+// sensor power switch. Core 1 only records the latest request; the sequence number
+// has one writer per side, so no lock is needed.
+enum power_request_type : uint8_t {
+    POWER_REQUEST_ON,
+    POWER_REQUEST_OFF,
+};
+
+static volatile power_request_type power_request     = POWER_REQUEST_ON;
+static volatile uint32_t           power_request_seq = 0;
+
+static void power_request_set(power_request_type request)
+{
+    power_request = request;
+    power_request_seq = power_request_seq + 1;
+}
 
 /************************ recv cmd from esp32  ****************************/
 
@@ -41,18 +61,11 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
         return;
     }
     switch (buffer[0]) {
-        case PKT_TYPE_CMD_SHUTDOWN: {
-            Serial.println("cmd shutdown");
-            sensor_power_off();
+        case PKT_TYPE_CMD_SHUTDOWN:
+            power_request_set(POWER_REQUEST_OFF);
             break;
-        }
         case PKT_TYPE_CMD_POWER_ON:
-            Serial.println("cmd power on");
-            sensor_power_on();
-            sensor_aht_init();
-            has_sht41 = sensor_sht41_init();
-            sensor_sgp40_init();
-            sensor_scd4x_init();
+            power_request_set(POWER_REQUEST_ON);
             break;
         case PKT_TYPE_CMD_BEEP_ON:
             beep_on();
@@ -71,6 +84,14 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
 /************************ setuo & loop ****************************/
 
 // static bool sd_init_flag = 0;
+
+static void sensors_init(void)
+{
+    has_aht   = sensor_aht_init();
+    has_sht41 = sensor_sht41_init();
+    sensor_sgp40_init();
+    sensor_scd4x_init();
+}
 
 void setup()
 {
@@ -95,13 +116,12 @@ void setup()
     beep_init();
     // beep_on();
 
-    sensor_aht_init();
-    has_sht41 = sensor_sht41_init();
-    sensor_sgp40_init();
-    sensor_scd4x_init();
+    sensors_init();
 
-    sensor_attached_send(packetSerial, PKT_SENSOR_ID_AHT20_TEMP, PKT_SENSOR_CAT_TEMP, "AHT20", "C");
-    sensor_attached_send(packetSerial, PKT_SENSOR_ID_AHT20_HUMIDITY, PKT_SENSOR_CAT_HUMIDITY, "AHT20", "%RH");
+    if (has_aht) {
+        sensor_attached_send(packetSerial, PKT_SENSOR_ID_AHT20_TEMP, PKT_SENSOR_CAT_TEMP, "AHT20", "C");
+        sensor_attached_send(packetSerial, PKT_SENSOR_ID_AHT20_HUMIDITY, PKT_SENSOR_CAT_HUMIDITY, "AHT20", "%RH");
+    }
     if (has_sht41) {
         sensor_attached_send(packetSerial, PKT_SENSOR_ID_GROVE_BASE, PKT_SENSOR_CAT_TEMP, "SHT41", "C");
         sensor_attached_send(packetSerial, PKT_SENSOR_ID_GROVE_BASE + 1, PKT_SENSOR_CAT_HUMIDITY, "SHT41", "%RH");
@@ -145,8 +165,84 @@ float calibrateSensor(float rawValue, float scaleFactor = 1.0, float offset = 0.
 
 /************************ END ****************************/
 
+static bool sensors_powered = true;
+
+static void power_requests_handle(void)
+{
+    static uint32_t handled_seq = 0;
+
+    uint32_t seq = power_request_seq;
+    if (seq == handled_seq) {
+        return;
+    }
+    handled_seq = seq;
+
+    if (power_request == POWER_REQUEST_OFF) {
+        Serial.println("cmd shutdown");
+        sensor_power_off();
+        sensors_powered = false;
+        return;
+    }
+
+    Serial.println("cmd power on");
+    if (!sensors_powered) {
+        sensor_power_on();
+        delay(100);  // let the sensors start before talking to them
+        sensors_powered = true;
+    }
+    sensors_init();
+}
+
+static void temperature_humidity_update(void)
+{
+    if (!has_aht) {
+        has_aht = sensor_aht_init();
+        if (has_aht) {
+            sensor_attached_send(packetSerial, PKT_SENSOR_ID_AHT20_TEMP, PKT_SENSOR_CAT_TEMP, "AHT20", "C");
+            sensor_attached_send(packetSerial, PKT_SENSOR_ID_AHT20_HUMIDITY, PKT_SENSOR_CAT_HUMIDITY, "AHT20", "%RH");
+        }
+    }
+    if (!has_sht41) {
+        has_sht41 = sensor_sht41_init();
+        if (has_sht41) {
+            sensor_attached_send(packetSerial, PKT_SENSOR_ID_GROVE_BASE, PKT_SENSOR_CAT_TEMP, "SHT41", "C");
+            sensor_attached_send(packetSerial, PKT_SENSOR_ID_GROVE_BASE + 1, PKT_SENSOR_CAT_HUMIDITY, "SHT41", "%RH");
+        }
+    }
+    bool used_sht41 = has_sht41 && sensor_sht41_get(data_aht);
+    if (!used_sht41 && !(has_aht && sensor_aht_get(data_aht))) {
+        return;
+    }
+    if (used_sht41) {
+        Serial.printf("SHT41: humidity: %.2f %% \t temperature: %.2f\n", data_aht.humidity, data_aht.temperature);
+    } else {
+        Serial.print("AHT20 fallback - ");
+        sensor_aht_print(data_aht);
+    }
+
+    // get the *calibration* data
+    float humidity = calibrateSensor(static_cast<float>(data_aht.humidity), 1, 0.0);  // humidity = 1 * raw_humidity + 0
+    sensor_data_send(packetSerial, PKT_TYPE_SENSOR_SHT41_HUMIDITY, humidity);  // send the humidity to ESP32
+    sensor_value_send(packetSerial, has_sht41 ? PKT_SENSOR_ID_GROVE_BASE + 1 : PKT_SENSOR_ID_AHT20_HUMIDITY, humidity);
+
+    // get the temperature from ATH
+    float temperature = calibrateSensor(static_cast<float>(data_aht.temperature));
+    sensor_data_send(packetSerial, PKT_TYPE_SENSOR_SHT41_TEMP, temperature);
+    sensor_value_send(packetSerial, has_sht41 ? PKT_SENSOR_ID_GROVE_BASE : PKT_SENSOR_ID_AHT20_TEMP, temperature);
+
+#if USING_AHT_COMPENSATION
+    SPG4x_compensationRh = static_cast<uint16_t>(data_aht.humidity * 65535 / 100);
+    SPG4x_compensationT  = static_cast<uint16_t>((data_aht.temperature + 45) * 65535 / 175);
+#endif
+}
+
 void loop()
 {
+    power_requests_handle();
+    if (!sensors_powered) {
+        return;
+    }
+
     if (scd4x_delay.check() && sensor_scd4x_get(data_scd)) {  // External Sensor, only use CO2; As
         // Temp and Humi is not accurate.
         sensor_scd4x_print(data_scd);
@@ -175,38 +271,7 @@ void loop()
     }
 
     if (aht_delay.check()) {
-        if (!has_sht41) {
-            has_sht41 = sensor_sht41_init();
-            if (has_sht41) {
-                sensor_attached_send(packetSerial, PKT_SENSOR_ID_GROVE_BASE, PKT_SENSOR_CAT_TEMP, "SHT41", "C");
-                sensor_attached_send(packetSerial, PKT_SENSOR_ID_GROVE_BASE + 1, PKT_SENSOR_CAT_HUMIDITY, "SHT41", "%RH");
-            }
-        }
-        bool used_sht41 = has_sht41 && sensor_sht41_get(data_aht);
-        if (!(used_sht41 || sensor_aht_get(data_aht))) {
-            return;
-        }
-        if (used_sht41) {
-            Serial.printf("SHT41: humidity: %.2f %% \t temperature: %.2f\n", data_aht.humidity, data_aht.temperature);
-        } else {
-            Serial.print("AHT20 fallback - ");
-            sensor_aht_print(data_aht);
-        }
-
-        // get the *calibration* data
-        float humidity = calibrateSensor(static_cast<float>(data_aht.humidity), 1, 0.0);  // humidity = 1 * raw_humidity + 0
-        sensor_data_send(packetSerial, PKT_TYPE_SENSOR_SHT41_HUMIDITY, humidity);  // send the humidity to ESP32
-        sensor_value_send(packetSerial, has_sht41 ? PKT_SENSOR_ID_GROVE_BASE + 1 : PKT_SENSOR_ID_AHT20_HUMIDITY, humidity);
-
-        // get the temperature from ATH
-        float temperature = calibrateSensor(static_cast<float>(data_aht.temperature));
-        sensor_data_send(packetSerial, PKT_TYPE_SENSOR_SHT41_TEMP, temperature);
-        sensor_value_send(packetSerial, has_sht41 ? PKT_SENSOR_ID_GROVE_BASE : PKT_SENSOR_ID_AHT20_TEMP, temperature);
-
-#if USING_AHT_COMPENSATION
-        SPG4x_compensationRh = static_cast<uint16_t>(data_aht.humidity * 65535 / 100);
-        SPG4x_compensationT  = static_cast<uint16_t>((data_aht.temperature + 45) * 65535 / 175);
-#endif
+        temperature_humidity_update();
     }
 }
 

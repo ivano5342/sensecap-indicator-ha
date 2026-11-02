@@ -86,7 +86,7 @@ typedef struct {
 
 /************************ aht  temp & humidity ****************************/
 
-void sensor_aht_init(void);
+bool sensor_aht_init(void);
 bool sensor_aht_get(AHTData& data);
 void sensor_aht_print(const AHTData& data);
 bool sensor_sht41_init(void);

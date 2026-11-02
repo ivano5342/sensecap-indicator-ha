@@ -135,9 +135,9 @@ void sensor_value_send(PacketSerial& packetSerial, uint8_t id, float data)
 
 /************************ aht  temp & humidity ****************************/
 
-void sensor_aht_init(void)
+bool sensor_aht_init(void)
 {
-    AHT.begin();
+    return AHT.begin();
 }
 
 bool sensor_aht_get(AHTData& data)
