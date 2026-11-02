@@ -91,6 +91,7 @@ static void sensors_init(void)
     has_sht41 = sensor_sht41_init();
     sensor_sgp40_init();
     sensor_scd4x_init();
+    sensor_sen66_init();
 }
 
 void setup()
@@ -135,11 +136,13 @@ void setup()
 NonBlockingDelay aht_delay(2000);  //
 NonBlockingDelay sgp40_delay(3800);  // Tvoc
 NonBlockingDelay scd4x_delay(3800);  // CO2 Above 3500 would be good
+NonBlockingDelay sen66_delay(5000);
 
 /*************************** data to send *****************************/
 AHTData   data_aht = {0};
 SPG40Data data_spg = {0};
 SCD4XData data_scd = {0};
+SEN66Data data_sen66 = {0};
 
 /************************ compensation  ****************************/
 uint16_t defaultCompenstaionRh = 0x8000;
@@ -165,7 +168,11 @@ float calibrateSensor(float rawValue, float scaleFactor = 1.0, float offset = 0.
 
 /************************ END ****************************/
 
-static bool sensors_powered = true;
+#define SEN66_CLIMATE_TIMEOUT_MS 15000
+
+static bool     sensors_powered       = true;
+static bool     sen66_climate_seen    = false;
+static uint32_t sen66_climate_seen_ms = 0;
 
 static void power_requests_handle(void)
 {
@@ -193,6 +200,17 @@ static void power_requests_handle(void)
     sensors_init();
 }
 
+static void sgp40_compensation_update(float humidity, float temperature)
+{
+#if USING_AHT_COMPENSATION
+    humidity    = constrain(humidity, 0.0f, 100.0f);
+    temperature = constrain(temperature, -45.0f, 130.0f);
+
+    SPG4x_compensationRh = static_cast<uint16_t>(humidity * 65535 / 100);
+    SPG4x_compensationT  = static_cast<uint16_t>((temperature + 45) * 65535 / 175);
+#endif
+}
+
 static void temperature_humidity_update(void)
 {
     if (!has_aht) {
@@ -211,6 +229,8 @@ static void temperature_humidity_update(void)
     }
     bool used_sht41 = has_sht41 && sensor_sht41_get(data_aht);
     if (!used_sht41 && !(has_aht && sensor_aht_get(data_aht))) {
+        SPG4x_compensationRh = defaultCompenstaionRh;
+        SPG4x_compensationT  = defaultCompenstaionT;
         return;
     }
     if (used_sht41) {
@@ -230,10 +250,48 @@ static void temperature_humidity_update(void)
     sensor_data_send(packetSerial, PKT_TYPE_SENSOR_SHT41_TEMP, temperature);
     sensor_value_send(packetSerial, has_sht41 ? PKT_SENSOR_ID_GROVE_BASE : PKT_SENSOR_ID_AHT20_TEMP, temperature);
 
-#if USING_AHT_COMPENSATION
-    SPG4x_compensationRh = static_cast<uint16_t>(data_aht.humidity * 65535 / 100);
-    SPG4x_compensationT  = static_cast<uint16_t>((data_aht.temperature + 45) * 65535 / 175);
-#endif
+    sgp40_compensation_update(data_aht.humidity, data_aht.temperature);
+}
+
+// Rejects NAN as well, because every comparison with NAN is false.
+static bool sen66_value_in_range(float value, float min, float max)
+{
+    return value >= min && value <= max;
+}
+
+static void sen66_value_send(pkt_type type, float value, float min, float max)
+{
+    if (sen66_value_in_range(value, min, max)) {
+        sensor_data_send(packetSerial, type, value);
+    }
+}
+
+static void sen66_data_send(const SEN66Data& data)
+{
+    // The sensor encodes PM up to 6553.4 and it is not clipped lower, so that very
+    // high readings such as smoke still reach the ESP32.
+    sen66_value_send(PKT_TYPE_SENSOR_SEN66_PM1_0, data.pm1p0, 0.0f, 6553.4f);
+    sen66_value_send(PKT_TYPE_SENSOR_SEN66_PM2_5, data.pm2p5, 0.0f, 6553.4f);
+    sen66_value_send(PKT_TYPE_SENSOR_SEN66_PM4_0, data.pm4p0, 0.0f, 6553.4f);
+    sen66_value_send(PKT_TYPE_SENSOR_SEN66_PM10_0, data.pm10p0, 0.0f, 6553.4f);
+    sen66_value_send(PKT_TYPE_SENSOR_SEN66_VOC_INDEX, data.vocIndex, 1.0f, 500.0f);
+    sen66_value_send(PKT_TYPE_SENSOR_SEN66_NOX_INDEX, data.noxIndex, 1.0f, 500.0f);
+    sen66_value_send(PKT_TYPE_SENSOR_SEN66_CO2, data.co2, 1.0f, 40000.0f);
+
+    if (sen66_value_in_range(data.humidity, 0.0f, 100.0f) && sen66_value_in_range(data.temperature, -40.0f, 125.0f)) {
+        sensor_data_send(packetSerial, PKT_TYPE_SENSOR_SHT41_HUMIDITY, data.humidity);
+        sensor_data_send(packetSerial, PKT_TYPE_SENSOR_SHT41_TEMP, data.temperature);
+        sgp40_compensation_update(data.humidity, data.temperature);
+        sen66_climate_seen    = true;
+        sen66_climate_seen_ms = millis();
+    }
+}
+
+// True while the SEN66 is supplying temperature and humidity, which takes priority
+// over the SHT41 and AHT20. Those are then neither probed nor read.
+static bool sen66_climate_active(void)
+{
+    return sensor_sen66_present() && sen66_climate_seen && millis() - sen66_climate_seen_ms < SEN66_CLIMATE_TIMEOUT_MS;
 }
 
 void loop()
@@ -270,8 +328,17 @@ void loop()
         sensor_value_send(packetSerial, PKT_SENSOR_ID_SGP40_VOC, voxIndex);
     }
 
-    if (aht_delay.check()) {
+    if (aht_delay.check() && !sen66_climate_active()) {
         temperature_humidity_update();
+    }
+
+    if (sen66_delay.check()) {
+        if (!sensor_sen66_present()) {
+            sensor_sen66_init();
+        } else if (sensor_sen66_get(data_sen66)) {
+            sensor_sen66_print(data_sen66);
+            sen66_data_send(data_sen66);
+        }
     }
 }
 

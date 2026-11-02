@@ -41,6 +41,15 @@ enum pkt_type {
     PKT_TYPE_SENSOR_ATTACHED = 0xB8,
     PKT_TYPE_SENSOR_DETACHED = 0xB9,
     PKT_TYPE_SENSOR_VALUE    = 0xBA,
+
+    // SEN66, float. Its temperature and humidity use the SHT41 packets.
+    PKT_TYPE_SENSOR_SEN66_PM1_0     = 0xC1,
+    PKT_TYPE_SENSOR_SEN66_PM2_5     = 0xC2,
+    PKT_TYPE_SENSOR_SEN66_PM4_0     = 0xC3,
+    PKT_TYPE_SENSOR_SEN66_PM10_0    = 0xC4,
+    PKT_TYPE_SENSOR_SEN66_VOC_INDEX = 0xC5,
+    PKT_TYPE_SENSOR_SEN66_NOX_INDEX = 0xC6,
+    PKT_TYPE_SENSOR_SEN66_CO2       = 0xC7,
 };
 
 #define PKT_SENSOR_ID_AHT20_TEMP 0
@@ -83,6 +92,19 @@ typedef struct {
     float    temperature;
 } SCD4XData;
 
+// A field the sensor reports as unknown is NAN.
+typedef struct {
+    float pm1p0;
+    float pm2p5;
+    float pm4p0;
+    float pm10p0;
+    float humidity;
+    float temperature;
+    float vocIndex;
+    float noxIndex;
+    float co2;
+} SEN66Data;
+
 
 /************************ aht  temp & humidity ****************************/
 
@@ -102,6 +124,13 @@ void sensor_sgp40_print(const SPG40Data& data);
 void sensor_scd4x_init(void);
 bool sensor_scd4x_get(SCD4XData& data);
 void sensor_scd4x_print(const SCD4XData& data);
+
+/************************ sen66 air quality ****************************/
+
+bool sensor_sen66_init(void);
+bool sensor_sen66_present(void);
+bool sensor_sen66_get(SEN66Data& data);
+void sensor_sen66_print(const SEN66Data& data);
 
 /************************ grove  ****************************/
 void grove_adc_get(void);  // todo

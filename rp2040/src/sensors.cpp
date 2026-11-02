@@ -12,6 +12,7 @@
 #include <math.h>
 #include <SensirionI2CSgp40.h>
 #include <SensirionI2cScd4x.h>
+#include <SensirionI2cSen66.h>
 #include <string.h>
 #include <VOCGasIndexAlgorithm.h>
 #include "indicator_rp2040.hpp"
@@ -20,6 +21,7 @@
 AHT20             AHT;    // grove-sensor: humi & temp
 SensirionI2CSgp40 sgp40;  // tvoc
 SensirionI2cScd4x scd4x;  // co2
+SensirionI2cSen66 sen66;  // grove-sensor: pm, humi & temp, voc, nox, co2
 
 static uint8_t sht41_address = 0x00;
 
@@ -412,4 +414,128 @@ void sensor_scd4x_print(const SCD4XData& data)
     } else {
         Serial.println("Invalid SCD4X data.");
     }
+}
+
+/************************ sen66 air quality ****************************/
+
+#define SEN66_MAX_READ_FAILURES 5
+
+static bool    sen66_found         = false;
+static uint8_t sen66_read_failures = 0;
+
+static void sen66_print_error(const char* command, int16_t error)
+{
+    char errorMessage[256];
+    Serial.printf("SEN66 %s failed: ", command);
+    errorToString(error, errorMessage, sizeof(errorMessage));
+    Serial.println(errorMessage);
+}
+
+static void sen66_record_read_failure(const char* command, int16_t error)
+{
+    sen66_print_error(command, error);
+    if (++sen66_read_failures >= SEN66_MAX_READ_FAILURES) {
+        Serial.println("SEN66 marked absent after repeated read failures");
+        sen66_found = false;
+    }
+}
+
+// Sends no device reset: the ESP32 requests power on at every boot, and a reset
+// would restart the measurement and could disturb VOC/NOx learning. Starting a
+// measurement that is already running has no effect.
+bool sensor_sen66_init(void)
+{
+    sen66_found         = false;
+    sen66_read_failures = 0;
+
+    sen66.begin(Wire, SEN66_I2C_ADDR_6B);
+
+    int8_t  serialNumber[32] = {0};
+    int16_t error            = sen66.getSerialNumber(serialNumber, sizeof(serialNumber));
+    if (error) {
+        sen66_print_error("getSerialNumber", error);
+        return false;
+    }
+    serialNumber[sizeof(serialNumber) - 1] = 0;
+
+    error = sen66.startContinuousMeasurement();
+    if (error) {
+        sen66_print_error("startContinuousMeasurement", error);
+        return false;
+    }
+
+    Serial.printf("SEN66 found, serial: %s\n", reinterpret_cast<const char*>(serialNumber));
+    sen66_found = true;
+    return true;
+}
+
+bool sensor_sen66_present(void)
+{
+    return sen66_found;
+}
+
+// Returns true when a new sample was read. A field the sensor reports as
+// unknown is NAN, which is expected for CO2, VOC and NOx just after start.
+bool sensor_sen66_get(SEN66Data& data)
+{
+    if (!sen66_found) {
+        return false;
+    }
+
+    uint8_t padding   = 0;
+    bool    dataReady = false;
+    int16_t error     = sen66.getDataReady(padding, dataReady);
+    if (error) {
+        sen66_record_read_failure("getDataReady", error);
+        return false;
+    }
+    if (!dataReady) {
+        return false;
+    }
+
+    uint16_t pm1p0, pm2p5, pm4p0, pm10p0, co2;
+    int16_t  humidity, temperature, vocIndex, noxIndex;
+    error = sen66.readMeasuredValuesAsIntegers(pm1p0, pm2p5, pm4p0, pm10p0, humidity, temperature, vocIndex, noxIndex, co2);
+    if (error) {
+        sen66_record_read_failure("readMeasuredValuesAsIntegers", error);
+        return false;
+    }
+    sen66_read_failures = 0;
+
+    const uint16_t unknownUint16 = 0xFFFF;
+    const int16_t  unknownInt16  = 0x7FFF;
+
+    data.pm1p0       = pm1p0 == unknownUint16 ? NAN : pm1p0 / 10.0f;
+    data.pm2p5       = pm2p5 == unknownUint16 ? NAN : pm2p5 / 10.0f;
+    data.pm4p0       = pm4p0 == unknownUint16 ? NAN : pm4p0 / 10.0f;
+    data.pm10p0      = pm10p0 == unknownUint16 ? NAN : pm10p0 / 10.0f;
+    data.humidity    = humidity == unknownInt16 ? NAN : humidity / 100.0f;
+    data.temperature = temperature == unknownInt16 ? NAN : temperature / 200.0f;
+    data.vocIndex    = vocIndex == unknownInt16 ? NAN : vocIndex / 10.0f;
+    data.noxIndex    = noxIndex == unknownInt16 ? NAN : noxIndex / 10.0f;
+    data.co2         = co2 == unknownUint16 ? NAN : static_cast<float>(co2);
+    return true;
+}
+
+void sensor_sen66_print(const SEN66Data& data)
+{
+    // Serial.print: printf drops floats in this build.
+    Serial.print("sensor sen66: PM1.0: ");
+    Serial.print(data.pm1p0, 1);
+    Serial.print("\tPM2.5: ");
+    Serial.print(data.pm2p5, 1);
+    Serial.print("\tPM4.0: ");
+    Serial.print(data.pm4p0, 1);
+    Serial.print("\tPM10: ");
+    Serial.print(data.pm10p0, 1);
+    Serial.print("\tHumidity: ");
+    Serial.print(data.humidity, 2);
+    Serial.print("\tTemperature: ");
+    Serial.print(data.temperature, 2);
+    Serial.print("\tVOC: ");
+    Serial.print(data.vocIndex, 1);
+    Serial.print("\tNOx: ");
+    Serial.print(data.noxIndex, 1);
+    Serial.print("\tCO2: ");
+    Serial.println(data.co2, 0);
 }
