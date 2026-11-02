@@ -17,7 +17,7 @@ ESP32-S3 + RP2040 固件，LVGL 9.5.0（ESP Component Manager 管理），ESP-ID
 main/
   ha/           HA 域：MQTT 订阅/发布、switch/sensor/arc 控件
   wifi/         WiFi 域：扫描、连接、状态显示
-  sensor/       Sensor 域：SHT41/SGP40/SCD41 数据展示
+  sensor/       Sensor 域：SHT41/SGP40/SCD41/SEN66 数据展示、网络传感器
   display/      Display 域：亮度、睡眠模式
   rp2040/       RP2040 UART/COBS 通信
   btn/          按钮 GPIO
@@ -42,7 +42,7 @@ main/
 ```
 main/ha/        ha.h, ha_mqtt.c, ha_sensor.c, ha_switch_screen.c, ha_config.c
 main/wifi/      wifi.h, wifi_model.c, wifi_view.c, wifi_list_screen.c, wifi_connect_screen.c
-main/sensor/    sensor_model.h, sensor_model.c, sensor_view.h, sensor_view.c
+main/sensor/    sensor_model.h, sensor_model.c, sensor_view.h, sensor_view.c, sen66_view.h, sen66_view.c
 main/display/   display.h, display_model.c, display_view.h, display_view.c
 main/nav/       nav.h, nav.c
 main/assets/    ui_img_*.c, ui_font_*.c（图像/字体资源）
@@ -53,14 +53,16 @@ main/assets/    ui_img_*.c, ui_font_*.c（图像/字体资源）
 
 ## 导航系统
 
-主屏使用 `lv_tileview`，横向滑动，当前 3 个 tile：
+主屏使用 `lv_tileview`，横向滑动，当前 5 个 tile：
 
 ```c
 // main/nav/nav.h
-#define NAV_TILE_HA_DATA  0   // 传感器数据页
-#define NAV_TILE_HA_CTRL  1   // HA 开关控制页
-#define NAV_TILE_HA_MIX   2   // HA 混合控件页（弧形/滑块）
-#define NAV_TILE_COUNT    3
+#define NAV_TILE_NETWORK_SENSOR 0   // 网络 PM 传感器页（启动页）
+#define NAV_TILE_HA_DATA        1   // 传感器数据页
+#define NAV_TILE_HA_CTRL        2   // HA 开关控制页
+#define NAV_TILE_HA_MIX         3   // HA 混合控件页（弧形/滑块）
+#define NAV_TILE_SEN66          4   // SEN66 空气质量页
+#define NAV_TILE_COUNT          5
 ```
 
 弹窗/设置使用 `lv_layer_top()` 作为父容器（悬浮在 tileview 之上）。
@@ -73,8 +75,8 @@ main/assets/    ui_img_*.c, ui_font_*.c（图像/字体资源）
 
 **Step 1** — `main/nav/nav.h` 增加常量（两处都要改）：
 ```c
-#define NAV_TILE_MY_PAGE  3
-#define NAV_TILE_COUNT    4   // ← 必须同步 +1，否则 tile 显示空白
+#define NAV_TILE_MY_PAGE  5
+#define NAV_TILE_COUNT    6   // ← 必须同步 +1，否则 tile 显示空白
 ```
 
 **Step 2** — `main/CMakeLists.txt` 的 `DIRECTORIES_TO_INCLUDE` 列表加入新目录：

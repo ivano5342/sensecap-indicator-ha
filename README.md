@@ -31,6 +31,7 @@ Firmware that turns the [Seeed Studio SenseCAP Indicator](https://www.seeedstudi
 
 - [x] MQTT broker integration (configurable address, port, client ID, username, password)
 - [x] Built-in sensor publishing: temperature, humidity, CO₂ (SCD41), tVOC (SGP40/SHT41)
+- [x] Optional Sensirion SEN66 on the Grove I2C port: PM1.0, PM2.5, PM4.0, PM10, VOC, NOx, CO₂, temperature and humidity, on its own display tile and over MQTT
 - [x] Home Assistant control widgets: 6 binary switches + 2 numeric sliders
 - [x] Wi-Fi and MQTT configuration from the touchscreen
 - [x] MQTT broker configuration from the serial console (`setmqtt`, `mqtthelp`)
@@ -64,7 +65,7 @@ The SenseCAP Indicator is a dual-MCU device:
 | MCU | Role | Key resources |
 |-----|------|---------------|
 | **ESP32-S3** | Display, touch, Wi-Fi, MQTT, Home Assistant logic | 8 MB flash, PSRAM @ 120 MHz OCT mode, 240 MHz CPU |
-| **RP2040** | Sensor acquisition on Grove ports | Reads CO₂, tVOC, temperature, humidity; relays to ESP32-S3 over UART |
+| **RP2040** | Sensor acquisition on Grove ports | Reads CO₂, tVOC, temperature, humidity and, with a SEN66, particulate matter and NOx; relays to ESP32-S3 over UART |
 
 The two chips communicate over a COBS-framed UART link. All Grove sensor access goes through the RP2040; the ESP32-S3 never reads sensors directly.
 
@@ -88,8 +89,14 @@ The two chips communicate over a COBS-framed UART link. All Grove sensor access 
 │  │   SCD41    │  │   SGP40    │  │   SHT41    │    │
 │  │   (CO₂)    │  │   (tVOC)   │  │ (temp/hum) │    │
 │  └────────────┘  └────────────┘  └────────────┘    │
+│  ┌────────────┐                                    │
+│  │   SEN66    │  PM, VOC, NOx, CO₂, temp/hum       │
+│  │  (Grove)   │                                    │
+│  └────────────┘                                    │
 └─────────────────────────────────────────────────────┘
 ```
+
+Temperature and humidity come from the SEN66 when it is connected, then the SHT41, then the AHT20. The source's values also drive SGP40 compensation.
 
 ### Model / View pattern
 
@@ -116,7 +123,19 @@ Three fixed topics carry all communication:
 | HA → Device (commands) | `indicator/switch/set` | `{"switch1":1,"switch5":50}` |
 | Device → HA (state echo) | `indicator/switch/state` | `{"switch1":1,"switch2":0}` |
 
+Each message carries one key, with the value as a string, for example `{"sen66_co2":"612"}`.
+
 **Sensor keys:** `temp`, `humidity`, `co2`, `tvoc`
+
+**SEN66 keys**, published only when a SEN66 is connected and the value is valid:
+
+| Key | Value | Format |
+|-----|-------|--------|
+| `sen66_pm1_0`, `sen66_pm2_5`, `sen66_pm4_0`, `sen66_pm10_0` | Particulate matter, µg/m³ | 1 decimal |
+| `sen66_voc`, `sen66_nox` | VOC and NOx index | Integer |
+| `sen66_co2` | CO₂, ppm | Integer |
+
+`co2` and `tvoc` stay the built-in SCD41 and SGP40 readings. The SEN66's temperature and humidity use the existing `temp` and `humidity` keys. Add the matching entities from [`examples/homeassistant/mqtt-entities.yaml`](examples/homeassistant/mqtt-entities.yaml).
 
 **Control keys:**
 
