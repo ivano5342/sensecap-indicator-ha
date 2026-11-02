@@ -4,6 +4,7 @@
 #include "view_data.h"
 #include "network_sensor_view.h"
 #include "sen66_view.h"
+#include "overview_view.h"
 
 extern int indicator_display_view_init(void);
 
@@ -32,6 +33,11 @@ int indicator_view_init(void) {
 
 #ifdef SEN66_VIEW_H
 	sen66_view_init();
+#endif
+
+#ifdef OVERVIEW_VIEW_H
+	/* Adds cards to the network sensor and SEN66 views, so it runs after both. */
+	overview_view_init();
 #endif
 
 #ifdef SETTINGS_H

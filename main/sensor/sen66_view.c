@@ -26,6 +26,7 @@
 LV_FONT_DECLARE(lv_font_montserrat_18);
 LV_FONT_DECLARE(lv_font_montserrat_24);
 LV_FONT_DECLARE(lv_font_montserrat_28);
+LV_FONT_DECLARE(lv_font_montserrat_36);
 
 static const char *TAG = "sen66-view";
 
@@ -55,6 +56,10 @@ static lv_obj_t *s_header;
 static lv_obj_t *s_cards[SEN66_CARD_COUNT];
 static lv_obj_t *s_values[SEN66_CARD_COUNT];
 
+/* Second copies of some cards, on the overview page. NULL where there is no copy. */
+static lv_obj_t *s_extra_cards[SEN66_CARD_COUNT];
+static lv_obj_t *s_extra_values[SEN66_CARD_COUNT];
+
 /* Guarded by the LVGL lock: the event task writes them, the LVGL timer reads them. */
 static bool s_seen;
 static bool s_stale;
@@ -72,6 +77,10 @@ static void sen66_set_stale(bool stale) {
 	for(size_t i = 0; i < SEN66_CARD_COUNT; i++)
 	{
 		lv_obj_set_style_opa(s_cards[i], stale ? LV_OPA_40 : LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+		if(s_extra_cards[i] != NULL)
+		{
+			lv_obj_set_style_opa(s_extra_cards[i], stale ? LV_OPA_40 : LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+		}
 	}
 }
 
@@ -130,20 +139,22 @@ static void sen66_on_sensor_data(void *handler_args, esp_event_base_t base, int3
 			sen66_set_stale(false);
 		}
 		lv_label_set_text(s_values[index], buf);
+		if(s_extra_values[index] != NULL)
+		{
+			lv_label_set_text(s_extra_values[index], buf);
+		}
 	}
 	lv_port_sem_give();
 }
 
-static void sen66_create_card(lv_obj_t *tile, size_t index) {
-	const sen66_card_spec_t *spec = &s_card_specs[index];
+static lv_obj_t *sen66_build_card(lv_obj_t *parent, const sen66_card_spec_t *spec, const char *name_text,
+								  int x, int y, int w, int h, const lv_font_t *label_font,
+								  const lv_font_t *value_font, lv_obj_t **value_out) {
 	lv_color_t accent = lv_color_hex(spec->color);
-	int col = index % SEN66_GRID_COLS;
-	int row = index / SEN66_GRID_COLS;
 
-	lv_obj_t *card = lv_obj_create(tile);
-	lv_obj_set_size(card, SEN66_CARD_WIDTH, SEN66_CARD_HEIGHT);
-	lv_obj_set_pos(card, SEN66_GRID_LEFT + col * (SEN66_CARD_WIDTH + SEN66_CARD_GAP),
-				   SEN66_GRID_TOP + row * (SEN66_CARD_HEIGHT + SEN66_CARD_GAP));
+	lv_obj_t *card = lv_obj_create(parent);
+	lv_obj_set_size(card, w, h);
+	lv_obj_set_pos(card, x, y);
 	lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
 	lv_obj_set_style_radius(card, 12, LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_bg_color(card, lv_color_hex(0x282828), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -152,25 +163,58 @@ static void sen66_create_card(lv_obj_t *tile, size_t index) {
 	lv_obj_set_style_pad_all(card, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
 	lv_obj_t *name = lv_label_create(card);
-	lv_label_set_text(name, spec->name);
+	lv_label_set_text(name, name_text);
 	lv_obj_set_style_text_color(name, lv_color_hex(0x9E9E9E), LV_PART_MAIN | LV_STATE_DEFAULT);
-	lv_obj_set_style_text_font(name, &lv_font_montserrat_18, LV_PART_MAIN | LV_STATE_DEFAULT);
+	lv_obj_set_style_text_font(name, label_font, LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_align(name, LV_ALIGN_TOP_MID, 0, 12);
 
 	lv_obj_t *value = lv_label_create(card);
 	lv_label_set_text(value, "N/A");
 	lv_obj_set_style_text_color(value, accent, LV_PART_MAIN | LV_STATE_DEFAULT);
-	lv_obj_set_style_text_font(value, &lv_font_montserrat_28, LV_PART_MAIN | LV_STATE_DEFAULT);
+	lv_obj_set_style_text_font(value, value_font, LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_align(value, LV_ALIGN_CENTER, 0, 2);
 
 	lv_obj_t *unit = lv_label_create(card);
 	lv_label_set_text(unit, spec->unit);
 	lv_obj_set_style_text_color(unit, accent, LV_PART_MAIN | LV_STATE_DEFAULT);
-	lv_obj_set_style_text_font(unit, &lv_font_montserrat_18, LV_PART_MAIN | LV_STATE_DEFAULT);
+	lv_obj_set_style_text_font(unit, label_font, LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_align(unit, LV_ALIGN_BOTTOM_MID, 0, -12);
 
-	s_cards[index] = card;
-	s_values[index] = value;
+	*value_out = value;
+	return card;
+}
+
+static void sen66_create_card(lv_obj_t *tile, size_t index) {
+	const sen66_card_spec_t *spec = &s_card_specs[index];
+	int col = index % SEN66_GRID_COLS;
+	int row = index / SEN66_GRID_COLS;
+
+	s_cards[index] = sen66_build_card(tile, spec, spec->name,
+									  SEN66_GRID_LEFT + col * (SEN66_CARD_WIDTH + SEN66_CARD_GAP),
+									  SEN66_GRID_TOP + row * (SEN66_CARD_HEIGHT + SEN66_CARD_GAP),
+									  SEN66_CARD_WIDTH, SEN66_CARD_HEIGHT,
+									  &lv_font_montserrat_18, &lv_font_montserrat_28, &s_values[index]);
+}
+
+void sen66_view_add_card(lv_obj_t *parent, enum sensor_data_type type, int x, int y, int w, int h) {
+	if(parent == NULL)
+	{
+		return;
+	}
+	for(size_t i = 0; i < SEN66_CARD_COUNT; i++)
+	{
+		if(s_card_specs[i].type == type && s_extra_cards[i] == NULL)
+		{
+			/* There's no header on the page these cards go on, so name the sensor. */
+			char name[32];
+			snprintf(name, sizeof(name), "SEN66 %s", s_card_specs[i].name);
+			s_extra_cards[i] = sen66_build_card(parent, &s_card_specs[i], name, x, y, w, h,
+												&lv_font_montserrat_18, &lv_font_montserrat_36,
+												&s_extra_values[i]);
+			return;
+		}
+	}
+	ESP_LOGE(TAG, "Can't add a card for sensor type %d", type);
 }
 
 void sen66_view_init(void) {

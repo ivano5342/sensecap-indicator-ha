@@ -16,8 +16,14 @@ static lv_obj_t* s_screen = NULL;
 static lv_obj_t* s_header = NULL;
 static lv_obj_t* s_labels[NETWORK_SENSOR_FIELD_COUNT];
 static lv_obj_t* s_col_headers[NETWORK_SENSOR_COUNT];
-static lv_obj_t* s_aqi_cards[NETWORK_SENSOR_COUNT];
-static lv_obj_t* s_aqi_value_labels[NETWORK_SENSOR_COUNT];
+
+/* AQI cards exist on both the network sensor page and the overview page. */
+#define AQI_CARD_SETS 2
+static lv_obj_t* s_aqi_cards[AQI_CARD_SETS][NETWORK_SENSOR_COUNT];
+static lv_obj_t* s_aqi_value_labels[AQI_CARD_SETS][NETWORK_SENSOR_COUNT];
+static int s_aqi_card_sets = 0;
+
+static const char* const s_col_names[] = {"CH A", "CH B"};
 
 /* Apply small-font style to a label */
 static void _apply_small_style(lv_obj_t* lbl) {
@@ -71,9 +77,9 @@ static void _on_network_sensor_stale_event(void* handler_arg, esp_event_base_t b
             lv_anim_start(&a);
         }
     }
-    for (int c = 0; c < NETWORK_SENSOR_COUNT; c++) {
-        if (s_aqi_cards[c]) {
-            lv_obj_set_style_opa(s_aqi_cards[c], stale ? LV_OPA_40 : LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    for (int set = 0; set < s_aqi_card_sets; set++) {
+        for (int c = 0; c < NETWORK_SENSOR_COUNT; c++) {
+            lv_obj_set_style_opa(s_aqi_cards[set][c], stale ? LV_OPA_40 : LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
         }
     }
     lv_port_sem_give();
@@ -94,8 +100,8 @@ static void _on_network_sensor_event(void* handler_arg, esp_event_base_t base, i
     if (type == NETWORK_SENSOR_AQI_COLOR_A || type == NETWORK_SENSOR_AQI_COLOR_B) {
         int idx = (type == NETWORK_SENSOR_AQI_COLOR_A) ? NETWORK_SENSOR_A : NETWORK_SENSOR_B;
         lv_port_sem_take();
-        if (s_aqi_cards[idx]) {
-            lv_obj_set_style_bg_color(s_aqi_cards[idx], _unpack_color(v->value), LV_PART_MAIN | LV_STATE_DEFAULT);
+        for (int set = 0; set < s_aqi_card_sets; set++) {
+            lv_obj_set_style_bg_color(s_aqi_cards[set][idx], _unpack_color(v->value), LV_PART_MAIN | LV_STATE_DEFAULT);
         }
         lv_port_sem_give();
         return;
@@ -107,7 +113,9 @@ static void _on_network_sensor_event(void* handler_arg, esp_event_base_t base, i
         char buf[16];
         snprintf(buf, sizeof(buf), "%.0f", v->value);
         lv_port_sem_take();
-        if (s_aqi_value_labels[idx]) lv_label_set_text(s_aqi_value_labels[idx], buf);
+        for (int set = 0; set < s_aqi_card_sets; set++) {
+            lv_label_set_text(s_aqi_value_labels[set][idx], buf);
+        }
         lv_port_sem_give();
         return;
     }
@@ -124,6 +132,53 @@ static void _on_network_sensor_event(void* handler_arg, esp_event_base_t base, i
             break;
         }
     }
+}
+
+static void _create_aqi_cards(lv_obj_t* parent, int parent_w, int y, int card_h) {
+    if (s_aqi_card_sets >= AQI_CARD_SETS) {
+        ESP_LOGE(TAG, "too many AQI card sets");
+        return;
+    }
+    int set = s_aqi_card_sets++;
+    int card_w = (parent_w - 12) / 2;
+
+    for (int c = 0; c < NETWORK_SENSOR_COUNT; c++) {
+        lv_obj_t* card = lv_obj_create(parent);
+        lv_obj_set_size(card, card_w, card_h);
+        lv_obj_set_pos(card, 4 + c * (card_w + 4), y);
+        lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_style_bg_color(card, lv_color_hex(0xF5F5F5), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(card, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_border_width(card, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_pad_all(card, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        s_aqi_cards[set][c] = card;
+
+        // Combined title label (sensor name + "PM2.5 AQI", centered, black)
+        lv_obj_t* title_lbl = lv_label_create(card);
+        char title_text[64];
+        snprintf(title_text, sizeof(title_text), "%s  PM2.5 AQI", s_col_names[c]);
+        lv_label_set_text(title_lbl, title_text);
+        lv_obj_set_style_text_color(title_lbl, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_opa(title_lbl, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_align(title_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+        _apply_small_style(title_lbl);
+        lv_obj_align(title_lbl, LV_ALIGN_BOTTOM_MID, 0, -12);
+
+        // AQI value (large, centered, black)
+        lv_obj_t* aqi_val = lv_label_create(card);
+        lv_label_set_text(aqi_val, "--");
+        lv_obj_set_style_text_color(aqi_val, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_opa(aqi_val, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_font(aqi_val, &lv_font_montserrat_80_digits, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_align(aqi_val, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_align(aqi_val, LV_ALIGN_CENTER, 0, -1);
+        s_aqi_value_labels[set][c] = aqi_val;
+    }
+}
+
+void network_sensor_view_add_aqi_cards(lv_obj_t* parent, int y, int card_h) {
+    if (parent == NULL) return;
+    _create_aqi_cards(parent, lv_obj_get_width(parent), y, card_h);
 }
 
 void network_sensor_view_init(lv_obj_t* tile_parent, esp_event_loop_handle_t event_handle) {
@@ -148,42 +203,9 @@ void network_sensor_view_init(lv_obj_t* tile_parent, esp_event_loop_handle_t eve
     s_header = header;
 
     // AQI Cards (top row, large)
-    int card_w = (screen_w - 12) / 2;
     int card_h = 160;
     int card_y = 32;
-    static const char* col_names[] = {"CH A", "CH B"};
-
-    for (int c = 0; c < NETWORK_SENSOR_COUNT; c++) {
-        lv_obj_t* card = lv_obj_create(s_screen);
-        lv_obj_set_size(card, card_w, card_h);
-        lv_obj_set_pos(card, 4 + c * (card_w + 4), card_y);
-        lv_obj_set_style_bg_color(card, lv_color_hex(0xF5F5F5), LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_bg_opa(card, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_border_width(card, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_pad_all(card, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-        s_aqi_cards[c] = card;
-
-        // Combined title label (sensor name + "PM2.5 AQI", centered, black)
-        lv_obj_t* title_lbl = lv_label_create(card);
-        char title_text[64];
-        snprintf(title_text, sizeof(title_text), "%s  PM2.5 AQI", col_names[c]);
-        lv_label_set_text(title_lbl, title_text);
-        lv_obj_set_style_text_color(title_lbl, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_text_opa(title_lbl, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_text_align(title_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-        _apply_small_style(title_lbl);
-        lv_obj_align(title_lbl, LV_ALIGN_BOTTOM_MID, 0, -12);
-
-        // AQI value (large, centered, black)
-        lv_obj_t* aqi_val = lv_label_create(card);
-        lv_label_set_text(aqi_val, "--");
-        lv_obj_set_style_text_color(aqi_val, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_text_opa(aqi_val, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_text_font(aqi_val, &lv_font_montserrat_80_digits, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_text_align(aqi_val, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_align(aqi_val, LV_ALIGN_CENTER, 0, -1);
-        s_aqi_value_labels[c] = aqi_val;
-    }
+    _create_aqi_cards(s_screen, screen_w, card_y, card_h);
 
     // Sensor columns below AQI cards
     int margin = 1;
@@ -207,7 +229,7 @@ void network_sensor_view_init(lv_obj_t* tile_parent, esp_event_loop_handle_t eve
 
         // Column header
         lv_obj_t* col_hdr = lv_label_create(col);
-        lv_label_set_text(col_hdr, col_names[c]);
+        lv_label_set_text(col_hdr, s_col_names[c]);
         lv_obj_set_style_text_color(col_hdr, lv_color_hex(0xAAAAAA), LV_PART_MAIN | LV_STATE_DEFAULT);
         _apply_small_style(col_hdr);
         s_col_headers[c] = col_hdr;

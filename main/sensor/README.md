@@ -14,6 +14,7 @@ RP2040 side of the SenseCAP Indicator.
 | `sensor_view.c` | Subscribes to `VIEW_EVENT_SENSOR_DATA` and updates LVGL labels. Skips types that have no card on its tile. |
 | `sen66_view.h` | SEN66 view initialization API. |
 | `sen66_view.c` | Builds the SEN66 tile, a 3x3 grid of its nine values, and updates it from `VIEW_EVENT_SENSOR_DATA`. |
+| `overview_view.c` | Builds the boot tile: the two network AQI cards above SEN66 PM2.5, PM10, CO2 and VOC cards. `network_sensor_view.c` and `sen66_view.c` own these cards and keep them updated, including dimming them when stale. |
 
 ## Init Sequence
 

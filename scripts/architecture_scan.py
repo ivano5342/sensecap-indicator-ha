@@ -125,6 +125,7 @@ VIEW_FILE_PATTERNS = (
     re.compile(r"(^|/)wifi/wifi_.*_screen\.c$"),
     re.compile(r"(^|/)sensor/(network_)?sensor_view\.c$"),
     re.compile(r"(^|/)sensor/sen66_view\.c$"),
+    re.compile(r"(^|/)sensor/overview_view\.c$"),
     re.compile(r"(^|/)display/display_view\.c$"),
     re.compile(r"(^|/)settings/settings_view\.c$"),
     re.compile(r"(^|/)lv_port\.[ch]$"),

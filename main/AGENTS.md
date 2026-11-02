@@ -53,16 +53,17 @@ main/assets/    ui_img_*.c, ui_font_*.c（图像/字体资源）
 
 ## 导航系统
 
-主屏使用 `lv_tileview`，横向滑动，当前 5 个 tile：
+主屏使用 `lv_tileview`，横向滑动，当前 6 个 tile：
 
 ```c
 // main/nav/nav.h
-#define NAV_TILE_NETWORK_SENSOR 0   // 网络 PM 传感器页（启动页）
-#define NAV_TILE_HA_DATA        1   // 传感器数据页
-#define NAV_TILE_HA_CTRL        2   // HA 开关控制页
-#define NAV_TILE_HA_MIX         3   // HA 混合控件页（弧形/滑块）
-#define NAV_TILE_SEN66          4   // SEN66 空气质量页
-#define NAV_TILE_COUNT          5
+#define NAV_TILE_OVERVIEW       0   // 总览页：网络 AQI + SEN66 主要数值（启动页）
+#define NAV_TILE_NETWORK_SENSOR 1   // 网络 PM 传感器页
+#define NAV_TILE_SEN66          2   // SEN66 空气质量页
+#define NAV_TILE_HA_DATA        3   // 传感器数据页
+#define NAV_TILE_HA_CTRL        4   // HA 开关控制页
+#define NAV_TILE_HA_MIX         5   // HA 混合控件页（弧形/滑块）
+#define NAV_TILE_COUNT          6
 ```
 
 弹窗/设置使用 `lv_layer_top()` 作为父容器（悬浮在 tileview 之上）。
@@ -75,8 +76,8 @@ main/assets/    ui_img_*.c, ui_font_*.c（图像/字体资源）
 
 **Step 1** — `main/nav/nav.h` 增加常量（两处都要改）：
 ```c
-#define NAV_TILE_MY_PAGE  5
-#define NAV_TILE_COUNT    6   // ← 必须同步 +1，否则 tile 显示空白
+#define NAV_TILE_MY_PAGE  6
+#define NAV_TILE_COUNT    7   // ← 必须同步 +1，否则 tile 显示空白
 ```
 
 **Step 2** — `main/CMakeLists.txt` 的 `DIRECTORIES_TO_INCLUDE` 列表加入新目录：

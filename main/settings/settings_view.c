@@ -280,9 +280,9 @@ int settings_view_init(void)
 
 	for(int i = 0; i < NAV_TILE_COUNT; i++)
 	{
-		if(i == NAV_TILE_NETWORK_SENSOR)
+		if(i == NAV_TILE_OVERVIEW || i == NAV_TILE_NETWORK_SENSOR)
 		{
-			continue; /* network sensor page has no settings gear */
+			continue; /* cards fill the top of these pages, so no settings gear */
 		}
 		lv_obj_t *tile = nav_get_tile(i);
 		if(!tile)
