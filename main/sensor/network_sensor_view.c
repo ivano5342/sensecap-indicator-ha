@@ -135,6 +135,12 @@ void network_sensor_view_init(lv_obj_t* tile_parent, esp_event_loop_handle_t eve
     lv_obj_set_size(s_screen, lv_obj_get_width(tile_parent), lv_obj_get_height(tile_parent));
     lv_obj_set_style_bg_color(s_screen, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(s_screen, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    /* Fill the tile exactly: theme padding would push the children past its edges and make the
+       page scroll, so a swipe would pan the page before it could change tiles. */
+    lv_obj_set_style_pad_all(s_screen, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(s_screen, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_radius(s_screen, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_remove_flag(s_screen, LV_OBJ_FLAG_SCROLLABLE);
 
     int screen_w = lv_obj_get_width(tile_parent);
     int screen_h = lv_obj_get_height(tile_parent);
@@ -196,6 +202,7 @@ void network_sensor_view_init(lv_obj_t* tile_parent, esp_event_loop_handle_t eve
     for (int c = 0; c < NETWORK_SENSOR_COUNT; c++) {
         lv_obj_t* col = lv_obj_create(s_screen);
         lv_obj_set_size(col, col_w, col_h);
+        lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_set_style_bg_opa(col, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
@@ -227,6 +234,7 @@ void network_sensor_view_init(lv_obj_t* tile_parent, esp_event_loop_handle_t eve
         // Row container to hold label + value side by side
         lv_obj_t* row = lv_obj_create(col_containers[c]);
         lv_obj_set_size(row, lv_pct(100), LV_SIZE_CONTENT);
+        lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
