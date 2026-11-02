@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Run ./dev with the ESP-IDF environment loaded.
+# Usage: scripts/dev-idf build [--no-clean]
+set -e
+cd "$(dirname "$0")/.."
+source "${IDF_EXPORT:-$HOME/.espressif/esp-idf/export.sh}" >/dev/null 2>&1
+exec ./dev "$@"
