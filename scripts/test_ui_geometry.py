@@ -48,11 +48,11 @@ class UiGeometryTests(unittest.TestCase):
         self.assertIn("LV_DIR_LEFT | LV_DIR_RIGHT", text)
         self.assertNotIn("nav_tile_scroll_dir", text)
 
-    def test_settings_is_gear_modal_not_fourth_tile(self) -> None:
+    def test_settings_is_gear_modal_not_a_tile(self) -> None:
         nav_header = NAV_HEADER.read_text()
         settings_text = SETTINGS_VIEW.read_text()
 
-        self.assertIn("#define NAV_TILE_COUNT          4", nav_header)
+        self.assertIn("#define NAV_TILE_COUNT          5", nav_header)
         self.assertNotIn("NAV_TILE_SETTINGS", nav_header)
         self.assertIn("LV_SYMBOL_SETTINGS", settings_text)
         self.assertIn("lv_obj_set_align(button, LV_ALIGN_TOP_LEFT)", settings_text)

@@ -8,7 +8,8 @@
 #define NAV_TILE_HA_DATA        1   /* sensor data view */
 #define NAV_TILE_HA_CTRL        2   /* switch control view */
 #define NAV_TILE_HA_MIX         3   /* mixed sensors+switches view */
-#define NAV_TILE_COUNT          4
+#define NAV_TILE_SEN66          4   /* SEN66 air quality view */
+#define NAV_TILE_COUNT          5
 
 int      nav_init(void);
 lv_obj_t *nav_get_tile(int tile_idx);   /* returns the container for that tile */

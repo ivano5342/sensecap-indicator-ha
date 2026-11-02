@@ -18,6 +18,7 @@
 #include "nav/nav.h"
 #include "display/display_view.h"
 #include "sensor/sensor_view.h"
+#include "sensor/sen66_view.h"
 #include "settings/settings_view.h"
 #include "wifi/wifi_view.h"
 #include "ha/ha_switch_screen.h"
@@ -41,6 +42,7 @@ int main(void) {
     view_sensor_init();
     indicator_wifi_view_init();
     ha_switch_screen_create();
+    sen66_view_init();
     settings_view_init();
 
     const char *open_settings = getenv("SIM_OPEN_SETTINGS");

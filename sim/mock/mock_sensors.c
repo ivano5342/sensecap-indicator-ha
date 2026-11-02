@@ -63,6 +63,13 @@ static void tick_sensors(void) {
     post_sensor(SGP40_SENSOR_TVOC,     osc(t,   0.0f,   300.0f, 45.0f));
     post_sensor(SHT41_SENSOR_TEMP,     osc(t,  18.0f,    32.0f, 60.0f));
     post_sensor(SHT41_SENSOR_HUMIDITY, osc(t,  30.0f,    80.0f, 50.0f));
+    post_sensor(SEN66_SENSOR_PM1_0,    osc(t,   0.0f,    40.0f, 40.0f));
+    post_sensor(SEN66_SENSOR_PM2_5,    osc(t,   0.0f,    60.0f, 40.0f));
+    post_sensor(SEN66_SENSOR_PM4_0,    osc(t,   0.0f,    80.0f, 40.0f));
+    post_sensor(SEN66_SENSOR_PM10_0,   osc(t,   0.0f,   100.0f, 40.0f));
+    post_sensor(SEN66_SENSOR_VOC,      osc(t,   1.0f,   300.0f, 45.0f));
+    post_sensor(SEN66_SENSOR_NOX,      osc(t,   1.0f,    50.0f, 55.0f));
+    post_sensor(SEN66_SENSOR_CO2,      osc(t, 400.0f,  1200.0f, 30.0f));
 }
 
 /* ── Public API ──────────────────────────────────────────────────────────── */
