@@ -1,5 +1,4 @@
 #include "indicator_util.h"
-#include <esp_system.h>
 #include <esp_log.h>
 #include <regex.h>
 #include <stdio.h>
@@ -93,4 +92,17 @@ void assemble_broker_url(const char* ip_address, char* broker_url, size_t broker
 
 	// 组装成完整的 broker URL，确保总长度不超过目标数组的大小
 	snprintf(broker_url, broker_url_size, "%s%s%s", prefix, ip_address, suffix);
+}
+
+bool normalize_broker_url(const char* input, char* output, size_t output_size) {
+	if(!input || input[0] == '\0' || !output || output_size == 0)
+		return false;
+
+	int written = 0;
+	if(strncmp(input, "mqtt://", 7) == 0 || strncmp(input, "mqtts://", 8) == 0)
+		written = snprintf(output, output_size, "%s", input);
+	else
+		written = snprintf(output, output_size, "mqtt://%s", input);
+
+	return written > 0 && (size_t)written < output_size;
 }

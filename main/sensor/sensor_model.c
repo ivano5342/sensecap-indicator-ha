@@ -1,4 +1,5 @@
 #include "sensor_model.h"
+#include "sensor_format.h"
 #include "esp_log.h"
 #include "esp_sntp.h"
 #include "freertos/semphr.h"
@@ -46,8 +47,7 @@ int update_sensor_data(const enum sensor_data_type type, uint8_t* p_data) {
 		return SENSOR_ERR_MUTEX_FAIL;
 	}
 
-	float sensorValue;
-	memcpy(&sensorValue, p_data, sizeof(float));
+	float sensorValue = sensor_pkt_read_float(p_data);
 #if sensor_model_DEBUG == 1
 	ESP_LOGI(TAG, "%s: %.0f", get_sensor_name(type), sensorValue);
 #endif
@@ -140,33 +140,20 @@ SensorData* get_current_sensor_data(SensorData* data, enum sensor_data_type type
  * @return int
  */
 int _sensor_data_parse_handle(uint8_t* p_data, ssize_t len) {
-	if(len < sizeof(float) + 1) // Length check
-	{
-		// Handle error or return
-		return -1;
-	}
+	enum sensor_data_type type;
 
-	uint8_t pkt_type = p_data[0];
-	switch(pkt_type)
+	switch(sensor_pkt_decode(p_data, (size_t)len, &type, NULL))
 	{
-			/*SCD41*/
-		case PKT_TYPE_SENSOR_SCD41_CO2:
-			// ESP_LOGI(TAG, "PKT_TYPE_SENSOR_SCD41_CO2");
-			update_sensor_data(SCD41_SENSOR_CO2, (p_data + 1));
+		case SENSOR_PKT_TOO_SHORT:
+			return -1;
+		case SENSOR_PKT_OK:
+			if(type == SHT41_SENSOR_TEMP)
+			{
+				ESP_LOGI(TAG, "PKT_TYPE_SENSOR_SHT41_TEMP"); // Not Used
+			}
+			update_sensor_data(type, (p_data + 1));
 			break;
-		case PKT_TYPE_SENSOR_SGP40_TVOC_INDEX:
-			// ESP_LOGI(TAG, "PKT_TYPE_SENSOR_SGP40_TVOC_INDEX");
-			update_sensor_data(SGP40_SENSOR_TVOC, (p_data + 1));
-			break;
-		case PKT_TYPE_SENSOR_SHT41_TEMP:
-			ESP_LOGI(TAG, "PKT_TYPE_SENSOR_SHT41_TEMP"); // Not Used
-			update_sensor_data(SHT41_SENSOR_TEMP, (p_data + 1));
-			break;
-			/*SHT41*/
-		case PKT_TYPE_SENSOR_SHT41_HUMIDITY:
-			// ESP_LOGI(TAG, "PKT_TYPE_SENSOR_SHT41_HUMIDITY");
-			update_sensor_data(SHT41_SENSOR_HUMIDITY, (p_data + 1));
-			break;
+		case SENSOR_PKT_UNKNOWN:
 		default:
 			// Handle unknown packet type
 			break;

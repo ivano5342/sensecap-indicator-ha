@@ -1,4 +1,5 @@
 #include "display_model.h"
+#include "display_logic.h"
 #include "esp_log.h"
 #include "storage_nvs.h"
 
@@ -71,15 +72,6 @@ static void _display_cfg_print(struct view_data_display* p_data) {
 }
 
 static void _lcd_bl_init(uint8_t brightness) {
-	if(brightness > 99)
-	{
-		brightness = 99;
-	}
-	else if(brightness < 1)
-	{
-		brightness = 1;
-	}
-
 	ledc_timer_config_t ledc_timer = {.speed_mode = LEDC_MODE,
 									  .timer_num = LEDC_TIMER,
 									  .duty_resolution = LEDC_DUTY_RES,
@@ -92,22 +84,13 @@ static void _lcd_bl_init(uint8_t brightness) {
 										  .timer_sel = LEDC_TIMER,
 										  .intr_type = LEDC_INTR_DISABLE,
 										  .gpio_num = LEDC_OUTPUT_IO,
-										  .duty = (8192 - 1) * brightness / 100, // Set duty to 0%
+										  .duty = display_brightness_to_duty(brightness),
 										  .hpoint = 0};
 	ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 }
 
 static void _lcd_bl_set(int brightness) {
-	if(brightness > 99)
-	{
-		brightness = 99;
-	}
-	else if(brightness < 1)
-	{
-		brightness = 1;
-	}
-
-	uint32_t duty = (uint32_t)(8192 - 1) * brightness / 100.0;
+	uint32_t duty = display_brightness_to_duty(brightness);
 
 	ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, duty));
 	ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
@@ -149,13 +132,14 @@ static void _timer_stop(void) {
 
 static void _sleep_mode_restart(bool en, int min) {
 	_timer_stop();
-	if(!en || min == 0)
+	uint64_t timeout_us = display_sleep_timeout_us(en, min);
+	if(timeout_us == 0)
 	{
 		return;
 	}
 	_timer_st_set(true);
 	xSemaphoreTake(_g_timer_mutex, portMAX_DELAY);
-	ESP_ERROR_CHECK(esp_timer_start_once(sleep_timer_handle, (uint64_t)min * 60 * 1000000));
+	ESP_ERROR_CHECK(esp_timer_start_once(sleep_timer_handle, timeout_us));
 	xSemaphoreGive(_g_timer_mutex);
 }
 
@@ -208,9 +192,7 @@ static void _display_cfg_restore(void) {
 			ESP_LOGI(TAG, "cfg read err:%d", ret);
 		}
 
-		cfg.brightness = 80;
-		cfg.sleep_mode_en = false;
-		cfg.sleep_mode_time_min = 0;
+		display_cfg_default(&cfg);
 		_display_cfg_set(&cfg);
 	}
 }

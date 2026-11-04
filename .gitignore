@@ -96,6 +96,7 @@ sdkconfig
 sdkconfig.old
 dependencies.lock
 build
+build-host/
 
 # PlatformIO
 .pio/

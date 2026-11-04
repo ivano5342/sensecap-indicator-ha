@@ -25,12 +25,21 @@ def main() -> int:
         action="store_true",
         help="run architecture checks only; useful when ESP-IDF is unavailable",
     )
+    parser.add_argument(
+        "--skip-host-tests",
+        action="store_true",
+        help="skip the CMake/Unity host unit tests in tests/host",
+    )
     args = parser.parse_args()
 
     run("Architecture scan", ["python3", "scripts/architecture_scan.py"])
     run("RGB LCD config", ["python3", "scripts/test_lcd_rgb_config.py"])
     run("UI geometry", ["python3", "scripts/test_ui_geometry.py"])
     run("Click deploy package", ["python3", "scripts/test_click_deploy_package.py"])
+    run("RP2040 protocol sync", ["python3", "scripts/verify_rp2040_protocol.py"])
+
+    if not args.skip_host_tests:
+        run("Host unit tests", [sys.executable, "scripts/host_tests.py"])
 
     if not args.skip_build:
         run("Firmware build", [sys.executable, "scripts/dev.py", "build"])

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "sensor_model.h"
+#include "sensor_format.h"
 #include "sensor_view.h"
 
 #include "home_assistant_config.h"
@@ -34,8 +35,6 @@ typedef struct SensorView
 } SensorView;
 
 static SensorView sensorPanel[ENUM_SENSOR_ALL] = {NULL};
-
-static void format_sensor_data(char* buf, enum sensor_data_type sensor_type, const float data);
 
 typedef struct SensorCardSpec
 {
@@ -178,7 +177,7 @@ void view_event_update_present_sensorData(void* handler_args, esp_event_base_t b
 
 	memset(data_buf, 0, sizeof(data_buf));
 
-	format_sensor_data(data_buf, p_data->sensor_type, p_data->value); // entry
+	sensor_format_value(data_buf, sizeof(data_buf), p_data->sensor_type, p_data->value); // entry
 
 #ifdef VIEW_DEBUG
 	ESP_LOGI(TAG, "update %s:%s", enum sensor_data_typeStrings[p_data->sensor_type], data_buf);
@@ -190,31 +189,6 @@ void view_event_update_present_sensorData(void* handler_args, esp_event_base_t b
 	}
 	// lv_label_set_text(sensorPanel[p_data->sensor_type].ui_lbl, data_buf); // update ui lable
 	lv_port_sem_give();
-}
-
-// format sensor data according to sensor type
-static void format_sensor_data(char* buf, enum sensor_data_type sensor_type, const float data) {
-	char* format_style;
-
-	if(data < 0)
-	{
-		snprintf(buf, BUF_SIZE, "N/A");
-		return;
-	}
-
-	switch(sensor_type)
-	{
-		case SHT41_SENSOR_TEMP:
-			format_style = "%.1f";
-			break;
-		case SCD41_SENSOR_CO2:
-		case SGP40_SENSOR_TVOC:
-		case SHT41_SENSOR_HUMIDITY:
-		default:
-			format_style = "%.0f";
-			break;
-	}
-	snprintf(buf, BUF_SIZE, format_style, data); // wrtie to buf
 }
 
 void view_sensor_init() {

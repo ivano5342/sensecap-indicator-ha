@@ -1,8 +1,10 @@
+#include <string.h>
+
 #include "ha_switch.h"
 #include "ha_mqtt.h"
+#include "ha_payload.h"
 #include "view_data.h"
 #include "home_assistant_config.h"
-#include "cJSON.h"
 #include "storage_nvs.h"
 #include "lv_port.h"
 #include "esp_log.h"
@@ -62,9 +64,9 @@ static void publish_switch_state(const struct view_data_ha_switch_data *switch_d
 
     if (switch_data->index >= 0 && switch_data->index < CONFIG_HA_SWITCH_ENTITY_NUM) {
         char data_buf[MAX_DATA_BUF_LEN];
-        int len = snprintf(data_buf, sizeof(data_buf), "{\"%s\": %d}", switch_keys[switch_data->index], (int)switch_data->value);
+        int len = ha_payload_format_switch_state(data_buf, sizeof(data_buf), switch_keys[switch_data->index], (int)switch_data->value);
 
-        if (len > 0 && len < MAX_DATA_BUF_LEN) {
+        if (len > 0) {
             esp_mqtt_client_publish(mqtt_ha_instance.mqtt_client, switch_topics[switch_data->index], data_buf, len, 0, 0);
             switch_state[switch_data->index] = switch_data->value;
             ha_ctrl_cfg_save();
@@ -158,35 +160,24 @@ void ha_switch_subscribe(esp_mqtt_client_handle_t client)
 
 int ha_switch_on_mqtt_data(const char *topic, int topic_len, const char *data, int data_len)
 {
-    if (strncmp(topic, ha_switch_entities[0].topic_set, topic_len) != 0) {
-        return -1;
+    const char *switch_keys[] = CONFIG_SWITCH_VALUE_KEYS;
+    struct view_data_ha_switch_data switch_data = {0};
+
+    ha_payload_status_t st = ha_payload_parse_switch(ha_switch_entities[0].topic_set,
+                                                     switch_keys, CONFIG_HA_SWITCH_ENTITY_NUM,
+                                                     topic, topic_len, data, data_len, &switch_data);
+    switch (st) {
+        case HA_PAYLOAD_OK:
+            ESP_LOGI(TAG, "MQTT message: %s set to %d", ha_switch_entities[switch_data.index].key, switch_data.value);
+            esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_HA_SWITCH_SET, &switch_data, sizeof(switch_data), portMAX_DELAY);
+            return 0;
+        case HA_PAYLOAD_TOPIC_MISMATCH:
+            return -1;
+        case HA_PAYLOAD_INVALID_JSON:
+            ESP_LOGE(TAG, "Invalid JSON structure");
+            return -1;
+        default:
+            ESP_LOGW(TAG, "No matching switch topic or invalid JSON structure");
+            return -1;
     }
-
-    cJSON *root = cJSON_ParseWithLength(data, data_len);
-    if (root == NULL || root->child == NULL || root->child->string == NULL) {
-        ESP_LOGE(TAG, "Invalid JSON structure");
-        cJSON_Delete(root);
-        return -1;
-    }
-
-    cJSON *c_key = root->child;
-    ESP_LOGI(TAG, "c_key = %s", c_key->string);
-    size_t key_len = strlen(c_key->string);
-
-    for (int i = 0; i < CONFIG_HA_SWITCH_ENTITY_NUM; i++) {
-        if (strncmp(c_key->string, ha_switch_entities[i].key, key_len) == 0) {
-            cJSON *cjson_item = cJSON_GetObjectItem(root, ha_switch_entities[i].key);
-            if (cjson_item != NULL && cJSON_IsNumber(cjson_item)) {
-                struct view_data_ha_switch_data switch_data = {.index = i, .value = cjson_item->valueint};
-                ESP_LOGI(TAG, "MQTT message: %s set to %d", ha_switch_entities[i].key, switch_data.value);
-                esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_HA_SWITCH_SET, &switch_data, sizeof(switch_data), portMAX_DELAY);
-                cJSON_Delete(root);
-                return 0;
-            }
-        }
-    }
-
-    ESP_LOGW(TAG, "No matching switch topic or invalid JSON structure");
-    cJSON_Delete(root);
-    return -1;
 }

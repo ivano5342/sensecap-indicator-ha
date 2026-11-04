@@ -44,18 +44,6 @@ static void print_mqtt_usage(void) {
     printf("    data : {\"switch1\":1}, {\"switch5\":24}, {\"switch8\":50}\n\n");
 }
 
-static bool normalize_broker_url(const char *input, char *output, size_t output_size) {
-    if (!input || input[0] == '\0' || !output || output_size == 0) return false;
-
-    int written = 0;
-    if (strncmp(input, "mqtt://", 7) == 0 || strncmp(input, "mqtts://", 8) == 0)
-        written = snprintf(output, output_size, "%s", input);
-    else
-        written = snprintf(output, output_size, "mqtt://%s", input);
-
-    return written > 0 && (size_t)written < output_size;
-}
-
 static int read_ha_config(int argc, char **argv) {
     ha_cfg_get(&ha_cfg);
     ESP_LOGI(TAG, "| Broker Address               | %-40s |", ha_cfg.broker_url);
