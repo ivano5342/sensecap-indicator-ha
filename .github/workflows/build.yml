@@ -1,0 +1,80 @@
+name: Build firmware
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  IDF_VERSION: v5.4.4
+  IDF_TARGET: esp32s3
+  IDF_PATH: /home/runner/esp-idf
+  IDF_TOOLS_PATH: /home/runner/.espressif
+
+jobs:
+  build:
+    name: ESP32-S3 firmware
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install host packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git wget flex bison gperf python3 python3-venv cmake ninja-build \
+            ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+
+      - name: Cache ESP-IDF and toolchain
+        id: idf-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.IDF_PATH }}
+            ${{ env.IDF_TOOLS_PATH }}
+          key: esp-idf-${{ runner.os }}-${{ env.IDF_VERSION }}-${{ env.IDF_TARGET }}-v1
+
+      - name: Install ESP-IDF
+        if: steps.idf-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "$IDF_VERSION" --recursive \
+            --shallow-submodules --jobs 8 \
+            https://github.com/espressif/esp-idf.git "$IDF_PATH"
+          "$IDF_PATH/install.sh" "$IDF_TARGET"
+
+      - name: Cache component manager downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Espressif/ComponentManager
+          key: idf-components-${{ runner.os }}-${{ hashFiles('**/idf_component.yml') }}
+          restore-keys: idf-components-${{ runner.os }}-
+
+      - name: Build firmware
+        run: |
+          . "$IDF_PATH/export.sh" >/dev/null
+          ./dev build
+          (cd build && python -m esptool --chip "$IDF_TARGET" merge_bin \
+            -o indicator_ha_merged.bin @flash_args)
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: indicator_ha-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            build/indicator_ha.bin
+            build/indicator_ha_merged.bin
+            build/bootloader/bootloader.bin
+            build/partition_table/partition-table.bin
+            build/flash_args
+            build/flasher_args.json
