@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-tests:
+    name: Host tests (${{ matrix.cc }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cc: gcc
+            sanitize: "ON"
+          - cc: clang
+            sanitize: "OFF"
+    env:
+      CC: ${{ matrix.cc }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Static checks (architecture, protocol sync, geometry, packaging)
+        run: python3 scripts/dev_check.py --skip-build --skip-host-tests
+
+      - name: Configure host tests
+        run: cmake -S tests/host -B build-host -DCMAKE_BUILD_TYPE=Debug -DHOST_TESTS_SANITIZE=${{ matrix.sanitize }}
+
+      - name: Build host tests
+        run: cmake --build build-host --parallel
+
+      - name: Run host tests
+        run: ctest --test-dir build-host --output-on-failure
+
+  firmware-build:
+    name: Firmware build (ESP-IDF v5.4.3)
+    runs-on: ubuntu-24.04
+    container: espressif/idf:v5.4.3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build ESP32-S3 firmware
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          . "$IDF_PATH/export.sh"
+          ./dev build

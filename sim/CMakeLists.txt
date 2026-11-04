@@ -52,6 +52,9 @@ set(STUB_SOURCES
 file(GLOB ASSET_SOURCES "${FW_ROOT}/main/assets/*.c")
 
 set(UI_SOURCES
+    # Pure helpers used by the views (also covered by tests/host).
+    ${FW_ROOT}/main/sensor/sensor_format.c
+    ${FW_ROOT}/main/display/display_logic.c
     ${FW_ROOT}/main/nav/nav.c
     ${FW_ROOT}/main/display/display_view.c
     ${FW_ROOT}/main/settings/settings_view.c

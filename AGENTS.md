@@ -51,6 +51,8 @@ View initialization creates the nav tileview and domain view/screen components. 
 | RP2040 UART ingress | `main/rp2040/rp2040.c`, `main/rp2040/rp2040.h` |
 | Built-in sensor cache/parser | `main/sensor/` |
 | Local development checks | `scripts/dev_check.py`, `scripts/architecture_scan.py` |
+| Host unit tests (pure logic) | `tests/host/`, `scripts/host_tests.py` |
+| CI | `.github/workflows/ci.yml` |
 
 ## Architecture Rules
 
@@ -62,6 +64,7 @@ View initialization creates the nav tileview and domain view/screen components. 
 - Background tasks and event handlers must update LVGL through the documented LVGL lock/deferral pattern for the current code.
 - MQTT topics and Home Assistant payload compatibility are product behavior.
 - Keep runtime refactors incremental; this project should remain buildable after each patch.
+- Hardware-independent logic (MQTT payload codec, RP2040 protocol/deframing, sensor and display formatting) lives in pure modules (`ha_payload`, `rp2040_protocol`, `sensor_format`, `display_logic`) that must not include ESP-IDF, FreeRTOS or LVGL headers. They are unit tested on the host; see `tests/host/README.md`.
 
 ## Verification
 
@@ -71,6 +74,14 @@ Preferred local checks:
 python3 scripts/dev_check.py --skip-build
 python3 scripts/dev_check.py
 ```
+
+Host unit tests only (no ESP-IDF needed; CMake + C compiler):
+
+```bash
+python3 scripts/host_tests.py
+```
+
+`dev_check.py` runs the host tests too; pass `--skip-host-tests` to skip them. CI (`.github/workflows/ci.yml`) runs the static checks and host tests (gcc + ASan/UBSan, clang), plus an ESP-IDF v5.4.3 firmware build.
 
 Architecture-only check:
 

@@ -140,6 +140,25 @@ MODEL_FILE_PATTERNS = (
 )
 
 
+# Hardware-independent modules compiled by the host unit tests (tests/host).
+# They may only include libc, cJSON and other pure project headers.
+PURE_MODULE_FILES = {
+    "main/ha/ha_payload.c",
+    "main/ha/ha_payload.h",
+    "main/sensor/sensor_format.c",
+    "main/sensor/sensor_format.h",
+    "main/rp2040/rp2040_protocol.c",
+    "main/rp2040/rp2040_protocol.h",
+    "main/display/display_logic.c",
+    "main/display/display_logic.h",
+    "main/util/cobs.c",
+    "main/util/cobs.h",
+}
+PURE_FORBIDDEN_INCLUDE_RE = re.compile(
+    r"#\s*include\s*[<\"]((?:esp_|freertos/|driver/|lvgl|lv_|nvs|mqtt|sdkconfig|bsp_)[^>\"]*|"
+    r"view_data\.h|rp2040\.h|sensor_model\.h|display_model\.h|ha_mqtt\.h|ha\.h)[>\"]"
+)
+
 LVGL_CALL_RE = re.compile(r"\b(lv_[a-zA-Z0-9_]+)\s*\(")
 EVENT_ENUM_RE = re.compile(r"^\s*(VIEW_EVENT_[A-Z0-9_]+)\s*(?:=.*?)?,?\s*(?://\s*(.*))?$")
 MODEL_UI_INCLUDE_RE = re.compile(r"#\s*include\s*[<\"](?:ui/)?ui\.h[>\"]")
@@ -314,6 +333,19 @@ def scan_event_payload_comments(path: Path, text: str, findings: list[Finding]) 
             )
 
 
+def scan_pure_module_includes(path: Path, text: str, findings: list[Finding]) -> None:
+    if rel_key(path) not in PURE_MODULE_FILES:
+        return
+    for match in PURE_FORBIDDEN_INCLUDE_RE.finditer(text):
+        add_finding(
+            findings,
+            path,
+            line_number(text, match.start()),
+            "pure-module-include",
+            f"host-tested pure module must not include {match.group(1)}",
+        )
+
+
 def scan_service_callbacks(path: Path, text: str, findings: list[Finding]) -> None:
     for match in SERVICE_CALLBACK_RE.finditer(text):
         symbol = match.group(1)
@@ -332,6 +364,12 @@ def scan_service_callbacks(path: Path, text: str, findings: list[Finding]) -> No
 
 def scan() -> list[Finding]:
     findings: list[Finding] = []
+    for rel in sorted(PURE_MODULE_FILES):
+        if not (ROOT / rel).is_file():
+            add_finding(
+                findings, ROOT / rel, 0, "pure-module-include",
+                "listed in PURE_MODULE_FILES but missing (update the list and tests/host/CMakeLists.txt)",
+            )
     for path in iter_source_files():
         text = path.read_text(encoding="utf-8", errors="ignore")
         scan_model_ui_includes(path, text, findings)
@@ -340,6 +378,7 @@ def scan() -> list[Finding]:
         scan_shared_bsp_includes(path, text, findings)
         scan_event_payload_comments(path, text, findings)
         scan_service_callbacks(path, text, findings)
+        scan_pure_module_includes(path, text, findings)
     return findings
 
 

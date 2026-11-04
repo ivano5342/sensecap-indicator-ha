@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "display_logic.h"
 #include "display_model.h"
 #include "display_view.h"
 #include "lv_port.h"
@@ -57,7 +58,7 @@ static void _display_cfg_from_widgets(struct view_data_display* cfg) {
 
 	const char* p_time = s_sleep_mode_time_cfg ?
 		lv_textarea_get_text(s_sleep_mode_time_cfg) : NULL;
-	cfg->sleep_mode_time_min = (cfg->sleep_mode_en && p_time) ? atoi(p_time) : 0;
+	cfg->sleep_mode_time_min = display_sleep_minutes_parse(cfg->sleep_mode_en, p_time);
 }
 
 static void _hide_display_modal(void) {
