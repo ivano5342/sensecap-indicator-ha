@@ -104,7 +104,7 @@ esp_err_t virtual_mic_read(vmic_handle_t handle, void *dest, size_t size, size_t
         xTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(1 + dt / 1000));
         vmic->last_ts = esp_timer_get_time();
     }
-    ESP_LOGI(TAG, "t=%ums", (uint32_t)(esp_timer_get_time() - ts) / 1000);
+    ESP_LOGI(TAG, "t=%" PRIu32 "ms", (uint32_t)(esp_timer_get_time() - ts) / 1000);
     ts = esp_timer_get_time();
     return ESP_OK;
 }
@@ -160,7 +160,7 @@ esp_err_t virtual_mic_input_buffer(vmic_handle_t handle, const uint8_t *inbuf, s
 
 //         bsp_codec_read(audio_buffer, 1024 * I2S_CHANNEL_NUM * sizeof(int16_t), &bytes_read, portMAX_DELAY);
 //         read_len += bytes_read;
-//         ESP_LOGI(TAG, "t=%ums", (uint32_t)(esp_timer_get_time() - ts) / 1000);
+//         ESP_LOGI(TAG, "t=%" PRIu32 "ms", (uint32_t)(esp_timer_get_time() - ts) / 1000);
 //         ts = esp_timer_get_time();
 
 

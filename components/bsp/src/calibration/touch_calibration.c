@@ -106,7 +106,7 @@ static void _get_point(int8_t index, point_t *cross, point_t *point)
     g_touch_read_rawdata(&tx, &ty);
     point->x = tx;
     point->y = ty;
-    ESP_LOGI(TAG, "[%d] X:%d Y:%d", index, point->x, point->y);
+    ESP_LOGI(TAG, "[%d] X:%" PRId32 " Y:%" PRId32, index, point->x, point->y);
 }
 
 /**
@@ -166,7 +166,7 @@ static esp_err_t calibration_calculate(const point_t *cross, const point_t *poin
     d2 = sqrt(temp_x + temp_y);
     fac = (float)d1 / d2;
     if (fac < 0.95 || fac > 1.05) {
-        ESP_LOGW(TAG, "Horizon check fail: %ld, %ld", d1, d2);
+        ESP_LOGW(TAG, "Horizon check fail: %d, %d", d1, d2);
     }
     // Check Vertical
     temp_x = pow(abs(points[0].x - points[2].x), 2);
@@ -177,7 +177,7 @@ static esp_err_t calibration_calculate(const point_t *cross, const point_t *poin
     d2 = sqrt(temp_x + temp_y);
     fac = (float)d1 / d2;
     if (fac < 0.95 || fac > 1.05) {
-        ESP_LOGW(TAG, "Horizon check fail: %ld, %ld", d1, d2);
+        ESP_LOGW(TAG, "Horizon check fail: %d, %d", d1, d2);
     }
     // Check diagonal
     temp_x = pow(abs(points[0].x - points[3].x), 2);
@@ -188,7 +188,7 @@ static esp_err_t calibration_calculate(const point_t *cross, const point_t *poin
     d2 = sqrt(temp_x + temp_y);
     fac = (float)d1 / d2;
     if (fac < 0.95 || fac > 1.05) {
-        ESP_LOGW(TAG, "Horizon check fail: %ld, %ld", d1, d2);
+        ESP_LOGW(TAG, "Horizon check fail: %d, %d", d1, d2);
     }
 
     // Caculate result

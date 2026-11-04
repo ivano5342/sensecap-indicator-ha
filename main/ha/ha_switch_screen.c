@@ -68,16 +68,9 @@ typedef struct {
 
 static ha_switch_screen_t _instance;
 
-static const char *const switch_names[SWITCH_SLOT_COUNT] = {
-    CONFIG_SWITCH1_UI_NAME,
-    CONFIG_SWITCH2_UI_NAME,
-    CONFIG_SWITCH3_UI_NAME,
-    CONFIG_SWITCH4_UI_NAME,
-    CONFIG_SWITCH5_UI_NAME,
-    CONFIG_SWITCH6_UI_NAME,
-    CONFIG_SWITCH7_UI_NAME,
-    CONFIG_SWITCH8_UI_NAME,
-};
+static const char *const switch_names[] = HA_SWITCH_UI_NAMES;
+_Static_assert(HA_ARRAY_LEN(switch_names) == SWITCH_SLOT_COUNT, "one UI name per switch slot");
+_Static_assert(HA_SWITCH_ENTITY_NUM == SWITCH_SLOT_COUNT, "one screen slot per HA switch entity");
 
 static const sensor_card_spec_t mix_sensor_cards[] = {
     {
@@ -214,7 +207,7 @@ static void _style_panel(lv_obj_t *obj, int32_t width, int32_t height, int32_t x
 {
     lv_obj_set_size(obj, width, height);
     lv_obj_set_pos(obj, x, y);
-    lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(obj, false);
     lv_obj_set_style_radius(obj, CARD_RADIUS, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(obj, lv_color_hex(CARD_BG), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -224,7 +217,8 @@ static void _style_panel(lv_obj_t *obj, int32_t width, int32_t height, int32_t x
 static void _style_checkable_card(lv_obj_t *btn, int32_t width, int32_t height, int32_t x, int32_t y)
 {
     _style_panel(btn, width, height, x, y);
-    lv_obj_add_flag(btn, LV_OBJ_FLAG_CHECKABLE | LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+    lv_obj_set_checkable(btn, true);
+    lv_obj_set_scroll_on_focus(btn, true);
     lv_obj_set_style_bg_color(btn, lv_color_hex(CARD_BG_CHECKED), LV_PART_MAIN | LV_STATE_CHECKED);
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_CHECKED);
 }
@@ -244,7 +238,7 @@ static void _create_header(lv_obj_t *tile, const char *title)
     lv_obj_t *header = lv_obj_create(tile);
     lv_obj_set_size(header, TILE_WIDTH, HEADER_HEIGHT);
     lv_obj_set_pos(header, 0, 0);
-    lv_obj_remove_flag(header, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(header, false);
     lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_width(header, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_all(header, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -260,13 +254,13 @@ static void _create_sensor_card(lv_obj_t *tile, const sensor_card_spec_t *spec)
 
     lv_obj_t *card = lv_button_create(tile);
     _style_panel(card, CARD_WIDTH, CARD_HEIGHT, spec->x, spec->y);
-    lv_obj_add_flag(card, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+    lv_obj_set_scroll_on_focus(card, true);
 
     lv_obj_t *icon = lv_image_create(card);
     lv_image_set_src(icon, spec->icon);
     lv_obj_set_pos(icon, 69, 22);
-    lv_obj_add_flag(icon, LV_OBJ_FLAG_ADV_HITTEST);
-    lv_obj_remove_flag(icon, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_adv_hittest(icon, true);
+    lv_obj_set_scrollable(icon, false);
 
     /*
      * This "N/A" label is the display slot for HA-pushed sensor values
@@ -307,8 +301,8 @@ static lv_obj_t *_create_large_toggle(lv_obj_t *tile, switch_slot_t *slot, int32
     } else {
         lv_obj_set_pos(icon, icon_x, icon_y);
     }
-    lv_obj_add_flag(icon, LV_OBJ_FLAG_ADV_HITTEST);
-    lv_obj_remove_flag(icon, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_adv_hittest(icon, true);
+    lv_obj_set_scrollable(icon, false);
 
     lv_obj_t *label = _create_label(btn, switch_names[slot->index], &lv_font_montserrat_18, TEXT_MUTED);
     lv_obj_set_align(label, LV_ALIGN_BOTTOM_MID);
@@ -332,8 +326,8 @@ static lv_obj_t *_create_row_toggle(lv_obj_t *tile, switch_slot_t *slot, int32_t
     lv_obj_t *icon = lv_image_create(btn);
     lv_image_set_src(icon, icon_off);
     lv_obj_set_pos(icon, 120, 2);
-    lv_obj_add_flag(icon, LV_OBJ_FLAG_ADV_HITTEST);
-    lv_obj_remove_flag(icon, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_adv_hittest(icon, true);
+    lv_obj_set_scrollable(icon, false);
 
     lv_obj_t *label = _create_label(btn, switch_names[slot->index], &lv_font_montserrat_18, TEXT_MUTED);
     lv_obj_set_pos(label, 16, 22);
@@ -352,8 +346,10 @@ static lv_obj_t *_create_embedded_switch(lv_obj_t *tile, switch_slot_t *slot, in
 {
     lv_obj_t *card = lv_button_create(tile);
     _style_panel(card, CARD_WIDTH, ROW_HEIGHT, x, y);
-    lv_obj_add_flag(card, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
-    lv_obj_remove_flag(card, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK | LV_OBJ_FLAG_CLICK_FOCUSABLE);
+    lv_obj_set_scroll_on_focus(card, true);
+    lv_obj_set_clickable(card, false);
+    lv_obj_set_press_lock(card, false);
+    lv_obj_set_click_focusable(card, false);
 
     lv_obj_t *label = _create_label(card, switch_names[slot->index], &lv_font_montserrat_18, TEXT_MUTED);
     lv_obj_set_pos(label, 16, 22);
@@ -381,15 +377,21 @@ static void _create_arc_card(lv_obj_t *tile, switch_slot_t *slot)
 {
     lv_obj_t *card = lv_obj_create(tile);
     _style_panel(card, CARD_WIDTH, CARD_HEIGHT, 244, 96);
-    lv_obj_remove_flag(card, LV_OBJ_FLAG_GESTURE_BUBBLE | LV_OBJ_FLAG_SNAPPABLE |
-                            LV_OBJ_FLAG_SCROLL_ELASTIC | LV_OBJ_FLAG_SCROLL_MOMENTUM);
+    lv_obj_set_gesture_bubble(card, false);
+    lv_obj_set_snappable(card, false);
+    lv_obj_set_scroll_elastic(card, false);
+    lv_obj_set_scroll_momentum(card, false);
 
     lv_obj_t *arc = lv_arc_create(card);
     lv_obj_set_size(arc, 130, 125);
     lv_obj_set_align(arc, LV_ALIGN_CENTER);
-    lv_obj_add_flag(arc, LV_OBJ_FLAG_FLEX_IN_NEW_TRACK);
-    lv_obj_remove_flag(arc, LV_OBJ_FLAG_PRESS_LOCK | LV_OBJ_FLAG_GESTURE_BUBBLE | LV_OBJ_FLAG_SCROLLABLE |
-                           LV_OBJ_FLAG_SCROLL_ELASTIC | LV_OBJ_FLAG_SCROLL_MOMENTUM | LV_OBJ_FLAG_SCROLL_CHAIN);
+    lv_obj_set_flex_in_new_track(arc, true);
+    lv_obj_set_press_lock(arc, false);
+    lv_obj_set_gesture_bubble(arc, false);
+    lv_obj_set_scrollable(arc, false);
+    lv_obj_set_scroll_elastic(arc, false);
+    lv_obj_set_scroll_momentum(arc, false);
+    lv_obj_set_scroll_chain(arc, false);
     lv_arc_set_value(arc, 70);
     lv_arc_set_bg_angles(arc, 140, 40);
     lv_obj_set_style_arc_color(arc, lv_color_hex(ARC_TRACK), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -423,8 +425,9 @@ static void _create_slider_card(lv_obj_t *tile, switch_slot_t *slot)
 {
     lv_obj_t *card = lv_button_create(tile);
     _style_panel(card, 440, ROW_HEIGHT, 22, 360);
-    lv_obj_add_flag(card, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
-    lv_obj_remove_flag(card, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_set_scroll_on_focus(card, true);
+    lv_obj_set_clickable(card, false);
+    lv_obj_set_gesture_bubble(card, false);
 
     lv_obj_t *label = _create_label(card, switch_names[slot->index], &lv_font_montserrat_18, TEXT_MUTED);
     lv_obj_set_align(label, LV_ALIGN_BOTTOM_MID);

@@ -40,9 +40,8 @@ ESP_EVENT_DEFINE_BASE(VIEW_EVENT_BASE);
 esp_event_loop_handle_t view_event_handle;
 
 extern void indicator_view_init(void);
-extern void indicator_model_init(void);
+extern int indicator_model_init(void);
 
-static const char* TAG = "app_main";
 
 void app_main(void) {
 	ESP_LOGI("TAG", "system start");

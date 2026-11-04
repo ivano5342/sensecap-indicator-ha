@@ -46,7 +46,7 @@ static void settings_hide_modal(void)
 {
 	if(s_settings_modal)
 	{
-		lv_obj_add_flag(s_settings_modal, LV_OBJ_FLAG_HIDDEN);
+		lv_obj_set_hidden(s_settings_modal, true);
 	}
 }
 
@@ -97,7 +97,7 @@ void settings_view_show(void)
 	}
 
 	settings_refresh_ip_label();
-	lv_obj_remove_flag(s_settings_modal, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_set_hidden(s_settings_modal, false);
 	lv_obj_move_foreground(s_settings_modal);
 }
 
@@ -111,7 +111,7 @@ static void settings_on_gear(lv_event_t *e)
 
 static void settings_style_card(lv_obj_t *card, lv_color_t color)
 {
-	lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_set_scrollable(card, false);
 	lv_obj_set_style_bg_color(card, color, LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_bg_opa(card, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_bg_opa(card, LV_OPA_80, LV_PART_MAIN | LV_STATE_PRESSED);
@@ -157,7 +157,7 @@ static void settings_create_gear_button(lv_obj_t *tile)
 	lv_obj_set_size(button, 52, 52);
 	lv_obj_set_align(button, LV_ALIGN_TOP_LEFT);
 	lv_obj_set_pos(button, 14, 14);
-	lv_obj_remove_flag(button, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_set_scrollable(button, false);
 	lv_obj_set_style_bg_color(button, lv_color_hex(0x101418),
 							  LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP,
@@ -192,9 +192,9 @@ static void settings_create_modal(void)
 	lv_obj_set_size(s_settings_modal, CONFIG_LCD_EVB_SCREEN_WIDTH,
 					CONFIG_LCD_EVB_SCREEN_HEIGHT);
 	lv_obj_set_align(s_settings_modal, LV_ALIGN_CENTER);
-	lv_obj_add_flag(s_settings_modal, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_remove_flag(s_settings_modal,
-					   LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
+	lv_obj_set_clickable(s_settings_modal, true);
+	lv_obj_set_scrollable(s_settings_modal, false);
+	lv_obj_set_gesture_bubble(s_settings_modal, false);
 	lv_obj_set_style_bg_color(s_settings_modal, lv_color_hex(0x101418),
 							  LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_bg_opa(s_settings_modal, LV_OPA_COVER,
@@ -205,12 +205,12 @@ static void settings_create_modal(void)
 							LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_pad_all(s_settings_modal, 0,
 							 LV_PART_MAIN | LV_STATE_DEFAULT);
-	lv_obj_add_flag(s_settings_modal, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_set_hidden(s_settings_modal, true);
 
 	lv_obj_t *header = lv_obj_create(s_settings_modal);
 	lv_obj_set_size(header, CONFIG_LCD_EVB_SCREEN_WIDTH, 85);
 	lv_obj_set_align(header, LV_ALIGN_TOP_MID);
-	lv_obj_remove_flag(header, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_set_scrollable(header, false);
 	lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP,
 							LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_border_opa(header, LV_OPA_TRANSP,

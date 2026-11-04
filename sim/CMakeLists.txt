@@ -14,7 +14,7 @@ pkg_check_modules(SDL2 REQUIRED sdl2)
 include(FetchContent)
 FetchContent_Declare(lvgl
     GIT_REPOSITORY https://github.com/lvgl/lvgl.git
-    GIT_TAG        v9.2.2
+    GIT_TAG        v9.6.0
     GIT_SHALLOW    TRUE
 )
 # Must be set before FetchContent_MakeAvailable so LVGL's CMake picks it up

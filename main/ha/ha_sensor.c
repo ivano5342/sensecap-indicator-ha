@@ -17,7 +17,7 @@ typedef struct ha_sensor_entity {
     int qos;
 } ha_sensor_entity_t;
 
-static ha_sensor_entity_t ha_sensor_entities[CONFIG_HA_SENSOR_ENTITY_NUM];
+static ha_sensor_entity_t ha_sensor_entities[HA_SENSOR_ENTITY_NUM];
 
 static void publish_sensor_data(const struct view_data_sensor_data *sensor_data)
 {
@@ -27,24 +27,24 @@ static void publish_sensor_data(const struct view_data_sensor_data *sensor_data)
 
     char data_buf[MAX_DATA_BUF_LEN];
     int len = 0;
-    const char *topic = CONFIG_SENSOR_BUILDIN_TOPIC_DATA;
+    const char *topic = HA_TOPIC_SENSOR_DATA;
     const char *key = NULL;
 
     switch (sensor_data->sensor_type) {
         case SCD41_SENSOR_CO2:
-            key = CONFIG_SENSOR_BUILDIN_CO2_VALUE_KEY;
+            key = HA_SENSOR_KEY_CO2;
             len = snprintf(data_buf, sizeof(data_buf), "{\"%s\":\"%d\"}", key, (int)sensor_data->value);
             break;
         case SGP40_SENSOR_TVOC:
-            key = CONFIG_SENSOR_BUILDIN_TVOC_VALUE_KEY;
+            key = HA_SENSOR_KEY_TVOC;
             len = snprintf(data_buf, sizeof(data_buf), "{\"%s\":\"%d\"}", key, (int)sensor_data->value);
             break;
         case SHT41_SENSOR_TEMP:
-            key = CONFIG_SENSOR_BUILDIN_TEMP_VALUE_KEY;
+            key = HA_SENSOR_KEY_TEMP;
             len = snprintf(data_buf, sizeof(data_buf), "{\"%s\":\"%.1f\"}", key, sensor_data->value);
             break;
         case SHT41_SENSOR_HUMIDITY:
-            key = CONFIG_SENSOR_BUILDIN_HUMIDITY_VALUE_KEY;
+            key = HA_SENSOR_KEY_HUMIDITY;
             len = snprintf(data_buf, sizeof(data_buf), "{\"%s\":\"%d\"}", key, (int)sensor_data->value);
             break;
         default:
@@ -69,15 +69,17 @@ static void view_event_handler(void *handler_args, esp_event_base_t base, int32_
 
 void ha_sensor_init(void)
 {
-    const char *sensor_keys[] = CONFIG_SENSOR_VALUE_KEYS;
-    const char *sensor_topics[] = CONFIG_SENSOR_TOPICS;
+    const char *sensor_keys[] = HA_SENSOR_VALUE_KEYS;
+    const char *sensor_topics[] = HA_SENSOR_TOPICS;
+    _Static_assert(HA_ARRAY_LEN(sensor_keys) == HA_SENSOR_ENTITY_NUM, "HA_SENSOR_VALUE_KEYS size");
+    _Static_assert(HA_ARRAY_LEN(sensor_topics) == HA_SENSOR_ENTITY_NUM, "HA_SENSOR_TOPICS size");
 
-    for (int i = 0; i < CONFIG_HA_SENSOR_ENTITY_NUM; i++) {
+    for (int i = 0; i < HA_SENSOR_ENTITY_NUM; i++) {
         ha_sensor_entities[i] = (ha_sensor_entity_t){
             .index = i,
             .key = (char *)sensor_keys[i],
             .topic = (char *)sensor_topics[i],
-            .qos = CONFIG_TOPIC_SENSOR_DATA_QOS,
+            .qos = HA_TOPIC_SENSOR_DATA_QOS,
         };
     }
 
@@ -86,7 +88,7 @@ void ha_sensor_init(void)
 
 void ha_sensor_subscribe(esp_mqtt_client_handle_t client)
 {
-    for (int i = 0; i < CONFIG_HA_SENSOR_ENTITY_NUM; i++) {
+    for (int i = 0; i < HA_SENSOR_ENTITY_NUM; i++) {
         int msg_id = esp_mqtt_client_subscribe(client, ha_sensor_entities[i].topic, ha_sensor_entities[i].qos);
         ESP_LOGI(TAG, "subscribe:%s, msg_id=%d", ha_sensor_entities[i].topic, msg_id);
     }
@@ -109,7 +111,7 @@ int ha_sensor_on_mqtt_data(const char *topic, int topic_len, const char *data, i
     ESP_LOGI(TAG, "c_key = %s", c_key->string);
     size_t key_len = strlen(c_key->string);
 
-    for (int i = 0; i < CONFIG_HA_SENSOR_ENTITY_NUM; i++) {
+    for (int i = 0; i < HA_SENSOR_ENTITY_NUM; i++) {
         if (strncmp(c_key->string, ha_sensor_entities[i].key, key_len) == 0) {
             cJSON *cjson_item = cJSON_GetObjectItem(root, c_key->string);
             if (cjson_item != NULL && cJSON_IsString(cjson_item)) {
@@ -129,8 +131,9 @@ int ha_sensor_on_mqtt_data(const char *topic, int topic_len, const char *data, i
                  *      "N/A" data labels on NAV_TILE_HA_MIX but discards the handle.
                  *      Store each label keyed by card index (cf. the switch_slot_t
                  *      pattern).
-                 *   2. Register a VIEW_EVENT_HA_SENSOR handler that, under the LVGL
-                 *      lock, does lv_label_set_text(labels[data->index], data->value).
+                 *   2. Register a VIEW_EVENT_HA_SENSOR handler (in the view layer)
+                 *      that, under the LVGL lock, sets labels[data->index] to
+                 *      data->value.
                  *   3. Make sensor_data.index here map to the intended card slot.
                  */
                 esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_HA_SENSOR, &sensor_data, sizeof(sensor_data), portMAX_DELAY);

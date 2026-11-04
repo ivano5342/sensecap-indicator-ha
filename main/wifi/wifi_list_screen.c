@@ -22,7 +22,14 @@ static void _rebuild_list(wifi_list_screen_t *s) {
     if(s->list) {
         lv_obj_delete(s->list);
     }
-    s->list = lv_list_create(s->parent);
+    /* Flex column; replaces the deprecated lv_list widget. The pad/clip
+     * styles below reproduce what the default theme applied to lv_list
+     * (pad_ver 0, pad_gap 0, clip_corner) so the layout is unchanged. */
+    s->list = lv_obj_create(s->parent);
+    lv_obj_set_flex_flow(s->list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_ver(s->list, 0, 0);
+    lv_obj_set_style_pad_column(s->list, 0, 0);
+    lv_obj_set_style_clip_corner(s->list, true, 0);
     lv_obj_set_style_pad_row(s->list, 8, 0);
     lv_obj_set_align(s->list, LV_ALIGN_CENTER);
     lv_obj_set_size(s->list, 420, 330);
@@ -82,7 +89,7 @@ wifi_list_screen_t *wifi_list_screen_create(lv_obj_t *parent, lv_obj_t *scan_wai
     s->scan_wait = scan_wait;
     s->list      = NULL;
     _rebuild_list(s);
-    lv_obj_add_flag(s->list, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(s->list, true);
 
     return s;
 }
@@ -96,14 +103,21 @@ void wifi_list_screen_set_item_callbacks(wifi_list_screen_t *s,
 }
 
 const char *wifi_list_screen_get_item_ssid(wifi_list_screen_t *s, lv_obj_t *item) {
-    if(!s || !s->list) return NULL;
-    return lv_list_get_btn_text(s->list, item);
+    if(!s || !s->list || !item) return NULL;
+    /* The SSID is the first label child of the row button (see _add_item). */
+    for(uint32_t i = 0; i < lv_obj_get_child_count(item); i++) {
+        lv_obj_t *child = lv_obj_get_child(item, i);
+        if(lv_obj_check_type(child, &lv_label_class)) {
+            return lv_label_get_text(child);
+        }
+    }
+    return "";
 }
 
 void wifi_list_screen_show_spinner(wifi_list_screen_t *s) {
     if(!s) return;
-    if(s->list)      lv_obj_add_flag(s->list, LV_OBJ_FLAG_HIDDEN);
-    if(s->scan_wait) lv_obj_remove_flag(s->scan_wait, LV_OBJ_FLAG_HIDDEN);
+    if(s->list)      lv_obj_set_hidden(s->list, true);
+    if(s->scan_wait) lv_obj_set_hidden(s->scan_wait, false);
 }
 
 void wifi_list_screen_update(wifi_list_screen_t *s, const struct view_data_wifi_list *list) {
@@ -123,8 +137,8 @@ void wifi_list_screen_update(wifi_list_screen_t *s, const struct view_data_wifi_
                   list->aps[i].rssi, false);
     }
 
-    lv_obj_remove_flag(s->list, LV_OBJ_FLAG_HIDDEN);
-    if(s->scan_wait) lv_obj_add_flag(s->scan_wait, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(s->list, false);
+    if(s->scan_wait) lv_obj_set_hidden(s->scan_wait, true);
 }
 
 void wifi_list_screen_destroy(wifi_list_screen_t *s) {

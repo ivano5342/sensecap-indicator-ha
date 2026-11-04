@@ -9,6 +9,6 @@ set(EXTRA_COMPONENT_DIRS components)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
-add_compile_options(-fdiagnostics-color=always -w)
+add_compile_options(-fdiagnostics-color=always)
 
 project(indicator_ha)

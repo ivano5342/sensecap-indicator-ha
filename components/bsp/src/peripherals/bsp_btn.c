@@ -57,7 +57,7 @@ esp_err_t bsp_btn_init_default(void)
 
     esp_err_t ret = ESP_OK;
     const board_res_desc_t *brd = bsp_board_get_description();
-    g_btn_handle = calloc(sizeof(button_handle_t), brd->BUTTON_TAB_LEN);
+    g_btn_handle = calloc(brd->BUTTON_TAB_LEN, sizeof(button_handle_t));
     ESP_RETURN_ON_FALSE(NULL != g_btn_handle, ESP_ERR_NO_MEM, TAG,  "memory is insufficient for button");
     for (size_t i = 0; i < brd->BUTTON_TAB_LEN; i++) {
         const board_button_t *btn = &brd->BUTTON_TAB[i];

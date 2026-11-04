@@ -17,6 +17,7 @@ Firmware that turns the [Seeed Studio SenseCAP Indicator](https://www.seeedstudi
 - [Features](#features)
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
+- [Wiring](#wiring)
 - [MQTT Protocol](#mqtt-protocol)
 - [Home Assistant Setup](#home-assistant-setup)
 - [Build & Flash](#build--flash)
@@ -85,7 +86,7 @@ The two chips communicate over a COBS-framed UART link. All Grove sensor access 
 │       ▼          RP2040                              │
 │  Packet dispatch                                     │
 │  ┌────────────┐  ┌────────────┐  ┌────────────┐    │
-│  │   SCD41    │  │   SGP40    │  │   SHT41    │    │
+│  │   SCD41    │  │   SGP40    │  │SHT41/AHT20 │    │
 │  │   (CO₂)    │  │   (tVOC)   │  │ (temp/hum) │    │
 │  └────────────┘  └────────────┘  └────────────┘    │
 └─────────────────────────────────────────────────────┘
@@ -100,9 +101,48 @@ Each application domain has a paired `*_model.c` and `*_view.c`:
 
 Model and view communicate exclusively through the **ESP event loop** with typed event IDs and payloads defined in `main/view_data.h`. Neither side calls the other's functions directly.
 
-SquareLine Studio-generated files in `main/ui/` are treated as assets. Custom logic goes in `*_view.c` files, not in the generated screens.
+The UI is handwritten LVGL 9 code in each domain's `*_view.c` / `*_screen.c` files; shared images and fonts live in `main/assets/`.
 
 For per-domain locations and architecture rules, see [`AGENTS.md`](AGENTS.md).
+
+---
+
+## Wiring
+
+### USB
+
+A single USB-C cable powers the Indicator and exposes **both** MCUs to the host (the ESP32-S3 serial port and the RP2040 USB port sit behind the same hub). Use a data-capable cable. When more than one serial device is listed, pass the port explicitly (`./dev flash -p <port>`, `./dev rp2040 upload -p <port>`).
+
+### ESP32-S3 ↔ RP2040 (internal, no user wiring)
+
+Fixed on the PCB. Listed here for debugging and for anyone changing the protocol.
+
+| Signal | ESP32-S3 | RP2040 | Settings |
+|--------|----------|--------|----------|
+| ESP32 TX → RP2040 RX | GPIO19 | GPIO17 (`Serial1` RX) | 115200 8N1, COBS-framed packets |
+| RP2040 TX → ESP32 RX | GPIO20 | GPIO16 (`Serial1` TX) | |
+
+Defined in `main/rp2040/rp2040.c` and `rp2040/src/main.cpp`; the packet types are in `rp2040/include/indicator_rp2040.hpp`.
+
+### Grove ports (on the RP2040)
+
+| Port | RP2040 pins | Used by this firmware |
+|------|-------------|-----------------------|
+| Grove I²C | SDA GPIO20, SCL GPIO21 | Temperature/humidity sensor, shared with the on-board SCD41 (CO₂, `0x62`) and SGP40 (tVOC) |
+| Grove ADC | GPIO26, GPIO27 | Read and printed on the RP2040 USB console only. **Not** forwarded to the ESP32-S3 or Home Assistant. |
+
+The RP2040 also drives GPIO18 high to power the sensor rail.
+
+**Temperature and humidity.** Plug a Grove sensor into the I²C port:
+
+- **SHT41** (preferred): detected at `0x44`, `0x45` or `0x46`. It is probed again every 2 s, so it can be hot-plugged.
+- **AHT20** (`0x38`): used as a fallback when no SHT41 responds.
+
+Readings are pushed to the ESP32-S3 every 5 s (`PKT_SEND_INTERVAL_MS` in `rp2040/platformio.ini`). They also feed humidity/temperature compensation to the SGP40 tVOC algorithm, so the tVOC reading is less accurate without one of these sensors attached.
+
+Any extra I²C device on the Grove bus must not use an address taken by one of the sensors above.
+
+The ESP32-S3 never talks to Grove devices directly. To support a new sensor, add it to the RP2040 firmware and forward it over the UART protocol.
 
 ---
 
@@ -131,7 +171,7 @@ Three fixed topics carry all communication:
 
 1. **Install an MQTT broker** (Mosquitto is the simplest) and enable the MQTT integration in Home Assistant.
 
-2. **Point the Indicator at the broker** — from the device's MQTT screen, or via [`setmqtt`](#console-commands) over serial.
+2. **Point the Indicator at the broker** — from the device's MQTT screen, or via [`setmqtt`](#console-commands) over serial. Until you do, the firmware connects to the **public** test broker `mqtt://broker.emqx.io`, so anyone can read your sensor data and toggle your switches. Set your own broker before you rely on it.
 
 3. **Add MQTT entities.** Append [`examples/homeassistant/mqtt-entities.yaml`](examples/homeassistant/mqtt-entities.yaml) to your `configuration.yaml` under the `mqtt:` key, then reload MQTT.
 
@@ -147,13 +187,15 @@ See also: [Seeed wiki — Home Assistant application guide](https://wiki.seeedst
 
 ### ESP32-S3 (main firmware)
 
-**Prerequisites:** ESP-IDF v5.4.x with `IDF_PATH` exported.
+**Prerequisites:** ESP-IDF v5.4.x with `IDF_PATH` exported (or `idf.py` already on `PATH`). The first build downloads LVGL 9 and `esp_lvgl_port` through the ESP Component Manager, so it needs network access.
 
 ```bash
-./dev build          # idf.py build
-./dev flash          # auto-detects port
-./dev monitor        # Ctrl-] to exit
-./dev fullclean      # reset build directory
+./dev build                 # clean build: deletes build/ first
+./dev build --no-clean      # incremental build
+./dev flash                 # auto-detects the port, 460800 baud
+./dev flash -p /dev/ttyUSB0 -b 921600
+./dev monitor               # Ctrl-] to exit
+./dev fullclean             # idf.py fullclean
 ```
 
 Manual `idf.py` works the same way:
@@ -178,7 +220,7 @@ Only needed when changing sensor protocols. Current version is **v2.1.0**. Built
 
 ```bash
 ./dev rp2040 build
-./dev rp2040 upload      # device must appear as /dev/cu.usbmodem*
+./dev rp2040 upload      # auto-detects the RP2040 by USB VID:PID; -p <port> to override
 ./dev rp2040 monitor
 ```
 
@@ -208,6 +250,18 @@ After `setmqtt` succeeds, the configuration is saved to NVS and the MQTT client 
 ---
 
 ## Configuration
+
+| What | Where |
+|------|-------|
+| ESP-IDF / LVGL / board options | `sdkconfig.defaults` (grouped by area; `sdkconfig` is generated and git-ignored) |
+| Default broker, MQTT topics, JSON keys, entity tables | `main/home_assistant_config.h` (`HA_*` macros) |
+| ESP-IDF component dependencies | `main/idf_component.yml` |
+| Flash layout | `partitions.csv` |
+| RP2040 sensor firmware and send interval | `rp2040/platformio.ini` |
+
+The `HA_DEFAULT_*` broker values only apply until a broker is saved from the touchscreen or with `setmqtt`; the saved config in NVS takes precedence. Topic names and JSON keys are product protocol: changing them breaks existing Home Assistant configs.
+
+The build compiles with warnings enabled and must stay warning-free: ESP-IDF promotes most `-Wall` warnings to errors.
 
 Run `idf.py menuconfig` to explore options. Notable locations:
 
@@ -240,7 +294,7 @@ cmake -S sim -B sim/build && cmake --build sim/build -j4
 | Firmware (ESP32-S3) | `v1.1.0` |
 | Coprocessor (RP2040) | `v2.1.0` |
 | ESP-IDF | `v5.4.x` |
-| LVGL | `v9.x` (managed component) |
+| LVGL | `>= 9.6, < 10` (managed component) |
 | RP2040 build system | PlatformIO |
 
 <details>

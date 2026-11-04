@@ -79,7 +79,6 @@ BMP3_INTF_RET_TYPE bmp3_i2c_interface_init(struct bmp3_dev *bmp3, uint8_t addr)
 
 esp_err_t bmp3xx_init(uint8_t i2c_addr)
 {
-    esp_err_t ret = ESP_OK;
     int8_t rslt;
 
     ESP_RETURN_ON_FALSE(NULL == bmp3xx_handle, ESP_FAIL, TAG, "bmp3xx already initialized");
@@ -125,7 +124,7 @@ esp_err_t bmp3xx_read_data(float *pressure, float *temperature)
 {
     ESP_RETURN_ON_FALSE(NULL != bmp3xx_handle, ESP_ERR_INVALID_STATE, TAG, "bmp3xx is not initialized");
     
-    struct bmp3_status status = { { 0 } };
+    struct bmp3_status status = { 0 };
     struct bmp3_data data = { 0 };
 
     int8_t rslt;

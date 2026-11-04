@@ -6,7 +6,7 @@ Agent 开发指南。在修改代码之前请先读完本文件。
 
 ## 项目概述
 
-ESP32-S3 + RP2040 固件，LVGL 9.5.0（ESP Component Manager 管理），ESP-IDF 5.4.3，FreeRTOS。
+ESP32-S3 + RP2040 固件，LVGL 9.6+（ESP Component Manager 管理，`main/idf_component.yml` 要求 `>=9.6.0`），ESP-IDF 5.4.3，FreeRTOS。
 显示屏：480×480 RGB565，触摸输入。Home Assistant 通过 MQTT 集成。
 
 ---
@@ -34,7 +34,7 @@ main/
   indicator_enabler.h 功能开关（#include 各域头文件）
   lv_port.c           ⚠️ BSP 硬件边界，见禁区说明
   view_data.h         事件 ID + 事件数据结构体
-  home_assistant_config.h  HA MQTT topic 配置
+  home_assistant_config.h  HA 默认 broker、MQTT topic、JSON key、实体表（`HA_*` 宏，勿用 `CONFIG_` 前缀）
   idf_component.yml   ESP Component Manager 依赖声明
 ```
 
@@ -139,10 +139,10 @@ lv_obj_t *overlay = lv_obj_create(lv_layer_top());
 lv_obj_set_size(overlay, 480, 480);
 lv_obj_set_style_bg_color(overlay, lv_color_hex(0x1A1A1A), 0);
 lv_obj_set_style_bg_opa(overlay, LV_OPA_COVER, 0);
-lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);   // 初始隐藏
+lv_obj_set_hidden(overlay, true);   // 初始隐藏
 
-// 显示：lv_obj_remove_flag(overlay, LV_OBJ_FLAG_HIDDEN);
-// 隐藏：lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);
+// 显示：lv_obj_set_hidden(overlay, false);
+// 隐藏：lv_obj_set_hidden(overlay, true);
 ```
 
 参考实现：`main/wifi/wifi_view.c`、`main/display/display_view.c`、`main/ha/ha_config.c`。
@@ -232,3 +232,5 @@ python3 scripts/test_ha_switch_protocol.py
 | `LV_IMG_CF_TRUE_COLOR_ALPHA` 未声明 | LVGL 8 常量 | 改为 `LV_COLOR_FORMAT_RGB565A8` 并设置 `header.stride` |
 | tile 页面空白 | `NAV_TILE_COUNT` 未更新 | nav.h 中 COUNT 同步 +1 |
 | LVGL assert / crash | 未持锁访问 LVGL | 加 `lv_port_sem_take/give` |
+| `lv_obj_add_flag` / `lv_obj_remove_flag` is deprecated | LVGL 9.6 弃用 flag API | 用 `lv_obj_set_<flag>(obj, bool)`，如 `lv_obj_set_hidden(obj, true)`；判断用 `lv_obj_is_hidden(obj)` |
+| `lv_list_*` is deprecated | LVGL 9.6 弃用 lv_list | 用 `lv_obj_create` + `lv_obj_set_flex_flow(obj, LV_FLEX_FLOW_COLUMN)`（见 `wifi_list_screen.c`） |

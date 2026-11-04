@@ -174,7 +174,7 @@ static int gt1151_read_regs(gt1151_obj_t *gt1151_obj, uint16_t reg_start_addr, u
  *
  * @return the read status, 0 reprensents  read the product id successfully.
  */
-static int gt1151_get_product_id(gt1151_obj_t *gt1151_obj, uint8_t *read_buf)
+__attribute__((unused)) static int gt1151_get_product_id(gt1151_obj_t *gt1151_obj, uint8_t *read_buf)
 {
     assert(gt1151_obj);
 
@@ -239,7 +239,7 @@ static int gt1x_read_version(struct gt1x_version_info *ver_info)
     match_opt = (buf[10] >> 4) & 0x0F;
 
     printf("IC VERSION:GT%s_%06X(Patch)_%04X(Mask)_%02X(SensorID)\n",
-           product_id, patch_id, mask_id >> 8, sensor_id);
+           product_id, (unsigned)patch_id, (unsigned)(mask_id >> 8), sensor_id);
 
     if (ver_info != NULL) {
         ver_info->mask_id = mask_id;
@@ -544,8 +544,8 @@ int gt1151_init(uint8_t i2c_addr)
         goto _exit;
     }
 
-    int32_t x = GT1151_TOUCH_WIDTH;
-    int32_t y = GT1151_TOUCH_HEIGHT;
+    uint16_t x = GT1151_TOUCH_WIDTH;
+    uint16_t y = GT1151_TOUCH_HEIGHT;
     gt1151_set_xy_range(gt1151_obj, 1, &x);
     gt1151_set_xy_range(gt1151_obj, 0, &y);
     gt1151_update_hw_config(gt1151_obj);

@@ -42,9 +42,9 @@ class UiGeometryTests(unittest.TestCase):
     def test_tileview_disables_elastic_offset_without_blocking_edge_swipes(self) -> None:
         text = NAV.read_text()
 
-        self.assertIn("LV_OBJ_FLAG_SCROLL_ELASTIC", text)
-        self.assertIn("LV_OBJ_FLAG_SCROLL_MOMENTUM", text)
-        self.assertIn("LV_OBJ_FLAG_SCROLL_CHAIN", text)
+        self.assertIn("lv_obj_set_scroll_elastic(s_tileview, false)", text)
+        self.assertIn("lv_obj_set_scroll_momentum(s_tileview, false)", text)
+        self.assertIn("lv_obj_set_scroll_chain(s_tileview, false)", text)
         self.assertIn("LV_DIR_LEFT | LV_DIR_RIGHT", text)
         self.assertNotIn("nav_tile_scroll_dir", text)
 
@@ -56,8 +56,9 @@ class UiGeometryTests(unittest.TestCase):
         self.assertNotIn("NAV_TILE_SETTINGS", nav_header)
         self.assertIn("LV_SYMBOL_SETTINGS", settings_text)
         self.assertIn("lv_obj_set_align(button, LV_ALIGN_TOP_LEFT)", settings_text)
-        self.assertIn("lv_obj_add_flag(s_settings_modal, LV_OBJ_FLAG_CLICKABLE)", settings_text)
-        self.assertIn("LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_GESTURE_BUBBLE", settings_text)
+        self.assertIn("lv_obj_set_clickable(s_settings_modal, true)", settings_text)
+        self.assertIn("lv_obj_set_scrollable(s_settings_modal, false)", settings_text)
+        self.assertIn("lv_obj_set_gesture_bubble(s_settings_modal, false)", settings_text)
         self.assertIn("SCREEN_DISPLAY_MODAL", settings_text)
         self.assertIn("SCREEN_BROKER_MODAL", settings_text)
 
@@ -89,8 +90,9 @@ class UiGeometryTests(unittest.TestCase):
         text = WIFI_VIEW.read_text()
 
         self.assertIn("lv_obj_move_foreground(s_wifi_modal)", text)
-        self.assertIn("lv_obj_add_flag(s_wifi_modal, LV_OBJ_FLAG_CLICKABLE)", text)
-        self.assertIn("LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_GESTURE_BUBBLE", text)
+        self.assertIn("lv_obj_set_clickable(s_wifi_modal, true)", text)
+        self.assertIn("lv_obj_set_scrollable(s_wifi_modal, false)", text)
+        self.assertIn("lv_obj_set_gesture_bubble(s_wifi_modal, false)", text)
         self.assertIn("lv_obj_set_size(back, 100, 50)", text)
         self.assertIn("lv_obj_set_pos(back, 10, 17)", text)
         self.assertIn("lv_obj_set_style_bg_opa(back, LV_OPA_TRANSP", text)

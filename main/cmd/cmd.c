@@ -34,13 +34,13 @@ static void print_mqtt_usage(void) {
     printf("    - Restart is automatic after setmqtt succeeds.\n\n");
     printf("MQTT topics and payloads\n");
     printf("  Sensor data from device:\n");
-    printf("    topic: %s\n", CONFIG_TOPIC_SENSOR_DATA);
+    printf("    topic: %s\n", HA_TOPIC_SENSOR_DATA);
     printf("    data : {\"temp\":\"23.5\"}, {\"humidity\":\"55\"}, {\"co2\":\"600\"}, {\"tvoc\":\"12\"}\n\n");
     printf("  Control device from Home Assistant/MQTT client:\n");
-    printf("    topic: %s\n", CONFIG_TOPIC_SWITCH_SET);
+    printf("    topic: %s\n", HA_TOPIC_SWITCH_SET);
     printf("    data : {\"switch1\":1}, {\"switch1\":0}, {\"switch5\":24}, {\"switch8\":50}\n\n");
     printf("  Device publishes control state:\n");
-    printf("    topic: %s\n", CONFIG_TOPIC_SWITCH_STATE);
+    printf("    topic: %s\n", HA_TOPIC_SWITCH_STATE);
     printf("    data : {\"switch1\":1}, {\"switch5\":24}, {\"switch8\":50}\n\n");
 }
 

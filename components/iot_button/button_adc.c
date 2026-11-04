@@ -32,7 +32,7 @@ static const char *TAG = "adc button";
 #define NO_OF_SAMPLES   CONFIG_ADC_BUTTON_SAMPLE_TIMES     //Multisampling
 
 #define ADC_BUTTON_WIDTH       ADC_WIDTH_BIT_DEFAULT
-#define ADC_BUTTON_ATTEN       ADC_ATTEN_DB_11
+#define ADC_BUTTON_ATTEN       ADC_ATTEN_DB_12
 #define ADC_BUTTON_ADC_UNIT    ADC_UNIT_1
 #define ADC_BUTTON_MAX_CHANNEL CONFIG_ADC_BUTTON_MAX_CHANNEL
 #define ADC_BUTTON_MAX_BUTTON  CONFIG_ADC_BUTTON_MAX_BUTTON_PER_CHANNEL
@@ -176,7 +176,7 @@ static uint32_t get_adc_volatge(adc1_channel_t channel)
     adc_reading /= NO_OF_SAMPLES;
     //Convert adc_reading to voltage in mV
     uint32_t voltage = adc_reading; //esp_adc_cal_raw_to_voltage(adc_reading, &g_button.adc_chars);
-    ESP_LOGV(TAG, "Raw: %d\tVoltage: %dmV", adc_reading, voltage);
+    ESP_LOGV(TAG, "Raw: %" PRIu32 "\tVoltage: %" PRIu32 "mV", adc_reading, voltage);
     return voltage;
 }
 

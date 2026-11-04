@@ -49,7 +49,6 @@ static esp_err_t tca9535_write_16(uint8_t reg_addr, uint16_t data)
 
 esp_err_t tca9535_init(uint8_t i2c_addr)
 {
-    esp_err_t ret = ESP_OK;
     ESP_RETURN_ON_FALSE(NULL == tca9535_handle, ESP_FAIL, TAG, "tca9535 already initialized");
 
     bsp_i2c_add_device(&tca9535_handle, i2c_addr);

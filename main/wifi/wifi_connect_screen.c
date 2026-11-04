@@ -14,7 +14,7 @@ struct wifi_connect_screen {
     lv_obj_t *kb;
     lv_obj_t *password_input;
     lv_obj_t *join_btn;
-    char       ssid[32];
+    char       ssid[VIEW_WIFI_SSID_BUF_LEN];
     bool       password_ready;
 };
 
@@ -30,7 +30,7 @@ static void _dismiss(wifi_connect_screen_t *s) {
         lv_obj_delete(s->container);
         s->container = NULL;
     }
-    lv_obj_remove_flag(lv_layer_top(), LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(lv_layer_top(), false);
     lv_obj_set_style_bg_opa(lv_layer_top(), LV_OPA_TRANSP, 0);
     free(s);
 }
@@ -76,12 +76,12 @@ static void _on_password_changed(lv_event_t *e) {
 
     if(valid && !s->password_ready) {
         s->password_ready = true;
-        lv_obj_add_flag(s->join_btn, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_clickable(s->join_btn, true);
         lv_obj_set_style_text_color(lv_obj_get_child(s->join_btn, 0),
                                     lv_color_hex(0x529d53), LV_PART_MAIN | LV_STATE_DEFAULT);
     } else if(!valid && s->password_ready) {
         s->password_ready = false;
-        lv_obj_remove_flag(s->join_btn, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_clickable(s->join_btn, false);
         lv_obj_set_style_text_color(lv_obj_get_child(s->join_btn, 0),
                                     lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     }
@@ -115,14 +115,14 @@ wifi_connect_screen_t *wifi_connect_screen_show(const char *ssid, bool have_pass
     if(!s) return NULL;
     strncpy(s->ssid, ssid, sizeof(s->ssid));
 
-    lv_obj_add_flag(lv_layer_top(), LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(lv_layer_top(), true);
     lv_obj_set_style_bg_opa(lv_layer_top(), LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(lv_layer_top(), lv_palette_main(LV_PALETTE_GREY), 0);
 
     s->container = lv_obj_create(lv_layer_top());
     lv_obj_set_size(s->container, 420, 420);
     lv_obj_set_align(s->container, LV_ALIGN_CENTER);
-    lv_obj_remove_flag(s->container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(s->container, false);
 
     /* Cancel button */
     lv_obj_t *cancel_btn = lv_button_create(s->container);
@@ -159,7 +159,7 @@ wifi_connect_screen_t *wifi_connect_screen_show(const char *ssid, bool have_pass
         lv_obj_set_pos(pw_label, -80, 100);
 
         /* Disable join until password is long enough */
-        lv_obj_remove_flag(s->join_btn, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_clickable(s->join_btn, false);
 
         /* Password textarea */
         s->password_input = lv_textarea_create(s->container);
@@ -191,14 +191,14 @@ wifi_connect_screen_t *wifi_details_screen_show(const char *ssid) {
     if(!s) return NULL;
     strncpy(s->ssid, ssid, sizeof(s->ssid));
 
-    lv_obj_add_flag(lv_layer_top(), LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(lv_layer_top(), true);
     lv_obj_set_style_bg_opa(lv_layer_top(), LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(lv_layer_top(), lv_palette_main(LV_PALETTE_GREY), 0);
 
     s->container = lv_obj_create(lv_layer_top());
     lv_obj_set_size(s->container, 300, 200);
     lv_obj_set_align(s->container, LV_ALIGN_CENTER);
-    lv_obj_remove_flag(s->container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(s->container, false);
 
     /* Cancel */
     lv_obj_t *cancel_btn = lv_button_create(s->container);

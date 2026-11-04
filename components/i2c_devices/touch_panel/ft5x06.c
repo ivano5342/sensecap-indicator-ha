@@ -99,8 +99,6 @@ esp_err_t ft5x06_init(void)
         return ESP_FAIL;
     }
 
-    esp_err_t ret_val = ESP_OK;
-
     // Valid touching detect threshold
     i2c_bus_write_byte(ft5x06_handle, FT5x06_ID_G_THGROUP, 70);
 

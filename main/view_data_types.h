@@ -21,22 +21,25 @@ enum start_screen {
 
 #define WIFI_SCAN_LIST_SIZE 15
 
+/* 802.11 SSIDs are up to 32 bytes; +1 for the NUL terminator. */
+#define VIEW_WIFI_SSID_BUF_LEN 33
+
 struct view_data_wifi_st {
     bool    is_connected;
     bool    is_connecting;
     bool    is_network;
-    char    ssid[32];
+    char    ssid[VIEW_WIFI_SSID_BUF_LEN];
     int8_t  rssi;
 };
 
 struct view_data_wifi_config {
-    char    ssid[32];
+    char    ssid[VIEW_WIFI_SSID_BUF_LEN];
     uint8_t password[64];
     bool    have_password;
 };
 
 struct view_data_wifi_item {
-    char    ssid[32];
+    char    ssid[VIEW_WIFI_SSID_BUF_LEN];
     bool    auth_mode;
     int8_t  rssi;
 };
