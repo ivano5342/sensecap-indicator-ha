@@ -14,6 +14,37 @@ Roaming (nearby sensors) is still parked.
 Planning only, 2026-10-04. No code written, no API calls made. Question: if both MQTT (from HA) and the display's own
 HTTP polling fail, should the display fetch the sensor's data from the PurpleAir cloud API?
 
+## Future additions (noted 2026-11-04, not planned yet)
+
+Other data the API offers, from the API docs (`api.purpleair.com/api_data.json`). Each requested
+field costs points, so add only what the display uses.
+
+Most useful here:
+
+1. **`pm2.5_10minute`** (or `_a`/`_b`): AQI from the 10-minute average is much steadier than the
+   live value and matches the PurpleAir map. One extra field per call.
+2. **`confidence` / `channel_flags`**: warn when channel A or B is failing or the two disagree.
+3. **`humidity`**: needed for the EPA correction, if it is ever turned on (it uses `pm2.5_cf_1`).
+4. **24-hour trend** from `GET /v1/sensors/<index>/history` (`average`, `start_timestamp`,
+   `end_timestamp`, `fields`): fetched about once an hour, it is cheap.
+5. **Points left** from `GET /v1/organization`: show in `setpurpleair` status so the key does
+   not run dry unnoticed.
+
+Also available, no use planned:
+
+| Group | Fields |
+| --- | --- |
+| PM2.5 averages | `pm2.5_10minute`, `_30minute`, `_60minute`, `_6hour`, `_24hour`, `_1week` (each also `_a`/`_b`) |
+| PM variants | `pm2.5`, `pm2.5_atm`, `pm2.5_cf_1`, `pm2.5_alt`, and the same for PM1.0 and PM10 |
+| Particle counts | `0.3_um_count` ... `10.0_um_count`, per channel |
+| Weather | `temperature`, `humidity`, `pressure` (also per channel). Measured inside the housing: temperature reads high, humidity low |
+| Gas | `voc`, `ozone1` (only models that have those sensors) |
+| Sensor status | `rssi`, `uptime`, `firmware_version`, `pa_latency`, `memory`, `last_modified` |
+| Station info | `name`, `model`, `hardware`, `location_type`, `latitude`, `longitude`, `altitude`, `private` |
+
+Other endpoints: `/v1/sensors` (many sensors; bounding box, `max_age`, `show_only`; see Roaming
+below), history as CSV, groups (server-side sensor lists read in one call), `/v1/keys` (check a key).
+
 ## Verdict
 
 **Technically feasible, moderate effort. Not decided; part of the open data source design** (MQTT vs local HTTP vs
