@@ -5,6 +5,7 @@
 #include "freertos/task.h"
 #include "view_data.h"
 #include "network_sensor_http.h"
+#include "network_sensor_cloud.h"
 
 static const char* TAG = "network-sensor-model";
 
@@ -15,6 +16,8 @@ static SemaphoreHandle_t _g_network_sensors_data_mutex = NULL;
 static SensorData _g_network_sensor_cache[ENUM_SENSOR_ALL];
 static esp_event_loop_handle_t _g_view_event_handle = NULL;
 static bool _g_stale = false;
+static enum network_sensor_source _g_source = NETWORK_SENSOR_SOURCE_LOCAL;
+static int32_t _g_source_age_s = 0;
 
 /**
  * @brief Initialize a network sensor data entry
@@ -88,6 +91,8 @@ void network_sensor_model_init(esp_event_loop_handle_t event_handle) {
     network_sensor_update(NETWORK_SENSOR_AQI_COLOR_B, 0x301934); // purple
 #endif
 
+    network_sensor_cloud_init();
+
     ESP_LOGI(TAG, "network_sensor_model_init complete");
     // Initialize HTTP polling infrastructure
     network_sensor_http_init();
@@ -137,6 +142,31 @@ void network_sensor_set_stale(bool is_stale) {
     esp_event_post_to(_g_view_event_handle, VIEW_EVENT_BASE,
                       VIEW_EVENT_NETWORK_SENSOR_STALE,
                       &v_data, sizeof(v_data), pdMS_TO_TICKS(100));  /* may run on the event loop task: never block forever */
+}
+
+/**
+ * @brief Report the data source (local HTTP or cloud)
+ */
+void network_sensor_set_source(enum network_sensor_source source, int32_t age_s) {
+    if (_g_network_sensors_data_mutex == NULL) {
+        return;
+    }
+    if (source == NETWORK_SENSOR_SOURCE_LOCAL) {
+        age_s = 0;
+    }
+    if (source == _g_source && age_s == _g_source_age_s) {
+        return;
+    }
+    if (source != _g_source) {
+        ESP_LOGW(TAG, "Network sensor source: %s", source == NETWORK_SENSOR_SOURCE_CLOUD ? "CLOUD" : "LOCAL");
+    }
+    _g_source = source;
+    _g_source_age_s = age_s;
+
+    struct view_data_network_sensor_source v_data = { .source = source, .age_s = age_s };
+    esp_event_post_to(_g_view_event_handle, VIEW_EVENT_BASE,
+                      VIEW_EVENT_NETWORK_SENSOR_SOURCE,
+                      &v_data, sizeof(v_data), pdMS_TO_TICKS(100));
 }
 
 /**

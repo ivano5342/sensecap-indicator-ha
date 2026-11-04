@@ -11,6 +11,7 @@
 #include "ha.h"
 #include "storage_nvs.h"
 #include "indicator_util.h"
+#include "network_sensor_cloud.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -230,6 +231,111 @@ static void register_mqtt_config(void) {
     ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
 }
 
+/* ── PurpleAir cloud fallback ─────────────────────────────────────────────── */
+
+struct {
+    struct arg_str *api_key;
+    struct arg_int *sensor_index;
+    struct arg_str *read_key;
+    struct arg_lit *clear;
+    struct arg_end *end;
+} purpleair_args;
+
+static void print_purpleair_status(void) {
+    network_sensor_cloud_cfg_t cfg;
+    network_sensor_cloud_cfg_get(&cfg);
+    printf("PurpleAir cloud fallback: %s\n",
+           (cfg.api_key[0] && cfg.sensor_index) ? "enabled" : "off (needs an API key and a sensor index)");
+    printf("  API key      : %s\n", cfg.api_key[0] ? "***" : "(not set)");
+    if (cfg.sensor_index) {
+        printf("  Sensor index : %u\n", (unsigned)cfg.sensor_index);
+    } else {
+        printf("  Sensor index : (not set)\n");
+    }
+    printf("  Read key     : %s\n", cfg.read_key[0] ? "***" : "(not set; only private sensors need one)");
+    printf("Used only after local polling has failed for a few minutes.\n");
+    printf("Example: setpurpleair -k <api_read_key> -i 123456   |   setpurpleair --clear\n");
+}
+
+static bool copy_key(char *dst, size_t dst_len, const char *src, const char *what) {
+    size_t len = strlen(src);
+    if (len >= dst_len) {
+        ESP_LOGE(TAG, "%s is too long (max %u characters)", what, (unsigned)(dst_len - 1));
+        return false;
+    }
+    for (size_t i = 0; i < len; i++) {
+        /* Keys are UUID-like; this also keeps '&' and spaces out of the request URL */
+        if (!isalnum((unsigned char)src[i]) && src[i] != '-' && src[i] != '_') {
+            ESP_LOGE(TAG, "%s has an invalid character '%c'", what, src[i]);
+            return false;
+        }
+    }
+    memset(dst, 0, dst_len);
+    memcpy(dst, src, len);
+    return true;
+}
+
+static int purpleair_config_set(int argc, char **argv) {
+    int nerrors = arg_parse(argc, argv, (void **)&purpleair_args);
+    if (nerrors != 0) {
+        arg_print_errors(stderr, purpleair_args.end, argv[0]);
+        return 1;
+    }
+
+    network_sensor_cloud_cfg_t cfg;
+    network_sensor_cloud_cfg_get(&cfg);
+
+    if (purpleair_args.clear->count > 0) {
+        memset(&cfg, 0, sizeof(cfg));
+    } else if (!purpleair_args.api_key->count && !purpleair_args.sensor_index->count &&
+               !purpleair_args.read_key->count) {
+        print_purpleair_status();
+        return 0;
+    }
+
+    if (purpleair_args.api_key->count > 0 &&
+        !copy_key(cfg.api_key, sizeof(cfg.api_key), purpleair_args.api_key->sval[0], "API key")) {
+        return 1;
+    }
+    if (purpleair_args.read_key->count > 0 &&
+        !copy_key(cfg.read_key, sizeof(cfg.read_key), purpleair_args.read_key->sval[0], "Read key")) {
+        return 1;
+    }
+    if (purpleair_args.sensor_index->count > 0) {
+        int idx = purpleair_args.sensor_index->ival[0];
+        if (idx < 0) {
+            ESP_LOGE(TAG, "Sensor index must be a positive number (0 disables the fallback)");
+            return 1;
+        }
+        cfg.sensor_index = (uint32_t)idx;
+    }
+
+    if (network_sensor_cloud_cfg_set(&cfg) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save PurpleAir configuration");
+        return 1;
+    }
+    ESP_LOGI(TAG, "PurpleAir configuration saved.");
+    print_purpleair_status();
+    return 0;
+}
+
+static void register_purpleair_config(void) {
+    purpleair_args.api_key      = arg_str0("k", "key", "<api_key>", "PurpleAir API READ key");
+    purpleair_args.sensor_index = arg_int0("i", "index", "<sensor_index>", "sensor_index from map.purpleair.com");
+    purpleair_args.read_key     = arg_str0("r", "readkey", "<read_key>", "Read key, for a private sensor only");
+    purpleair_args.clear        = arg_lit0(NULL, "clear", "Remove all PurpleAir settings (turns the fallback off)");
+    purpleair_args.end          = arg_end(4);
+
+    const esp_console_cmd_t cmd = {
+        .command  = "setpurpleair",
+        .help     = "PurpleAir cloud fallback. No args: show status. Example: setpurpleair -k <key> -i 123456",
+        .hint     = NULL,
+        .func     = &purpleair_config_set,
+        .argtable = &purpleair_args,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
+}
+
 int indicator_cmd_init(void) {
     esp_console_repl_t       *repl        = NULL;
     esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
@@ -249,6 +355,7 @@ int indicator_cmd_init(void) {
     register_read_config();
     register_mqtt_help();
     register_mqtt_config();
+    register_purpleair_config();
     register_dump_tasks();
     register_crash();
     report_saved_coredump();

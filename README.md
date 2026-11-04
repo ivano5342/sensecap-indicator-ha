@@ -205,6 +205,25 @@ setmqtt --addr mqtt://broker.emqx.io
 
 After `setmqtt` succeeds, the configuration is saved to NVS and the MQTT client restarts automatically.
 
+### PurpleAir cloud fallback
+
+If the local PurpleAir sensor stops answering for 5 minutes, the network sensor page can switch to
+the PurpleAir cloud API. It is off until an API key and a sensor index are set:
+
+| Command | Description |
+|---------|-------------|
+| `setpurpleair` | Show the fallback status (keys are masked) |
+| `setpurpleair -k <api_read_key> -i <sensor_index>` | Turn the fallback on |
+| `setpurpleair -r <read_key>` | Read key, only for a private sensor |
+| `setpurpleair --clear` | Remove the settings (fallback off) |
+
+Get an API read key at [develop.purpleair.com](https://develop.purpleair.com); the `sensor_index`
+is shown for the sensor on [map.purpleair.com](https://map.purpleair.com). In cloud mode the page
+header shows `CLOUD` and the age of the data; AQI and its colour are computed on the device from
+PM2.5 (pre-2024 EPA breakpoints, to match the sensor's own AQI). Local polling keeps running and
+the page switches back as soon as the sensor answers again. Cloud calls cost PurpleAir points:
+one call every 2 minutes, only while in cloud mode.
+
 ---
 
 ## Configuration

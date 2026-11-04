@@ -1,5 +1,16 @@
 # Findings: PurpleAir cloud API as a third fallback
 
+## Status (2026-11-04): fallback implemented
+
+Built as an opt-in fallback after local HTTP (the device has no MQTT path for this sensor yet), with
+these choices: switch after 5 min without a good local poll; poll the cloud every 2 min; stale when
+the cloud data is 10 min old; AQI from PM2.5 ATM with the **pre-2024** EPA breakpoints, to match the
+sensor's own `pm2.5_aqi`; no EPA humidity correction. Settings: `setpurpleair` console command (see
+README). Field names below were checked against the API docs (`api.purpleair.com/api_data.json`):
+`pm1.0_atm_a/_b`, `pm2.5_atm_a/_b`, `pm10.0_atm_a/_b`, `last_seen`, top-level `time_stamp`, header
+`X-API-Key`, and `read_key` for private sensors. Not yet tested on hardware or with a real key.
+Roaming (nearby sensors) is still parked.
+
 Planning only, 2026-10-04. No code written, no API calls made. Question: if both MQTT (from HA) and the display's own
 HTTP polling fail, should the display fetch the sensor's data from the PurpleAir cloud API?
 

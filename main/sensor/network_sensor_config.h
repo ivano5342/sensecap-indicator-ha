@@ -16,6 +16,14 @@ extern "C" {
 #define NETWORK_SENSOR_HTTP_TIMEOUT_MS   2000        // Healthy replies take <~0.4 s; the sensor stalls ~36 s every 120 s
 #define NETWORK_SENSOR_STALE_AFTER_SEC   90          // Stalls run ~36 s, at most ~54 s seen; no good poll for this long -> stale
 
+/* ── PurpleAir cloud fallback (off until `setpurpleair` sets a key and sensor index) ── */
+
+#define NETWORK_SENSOR_CLOUD_HOST              "api.purpleair.com"
+#define NETWORK_SENSOR_CLOUD_AFTER_SEC         300   // Local polling failed this long -> switch to the cloud
+#define NETWORK_SENSOR_CLOUD_POLL_INTERVAL_SEC 120   // The cloud updates every ~2 min; faster polls only cost points
+#define NETWORK_SENSOR_CLOUD_STALE_AFTER_SEC   600   // Cloud reading older than this (sensor upload age) -> stale
+#define NETWORK_SENSOR_CLOUD_TIMEOUT_MS        10000 // TLS handshake plus reply; a few seconds is normal
+
 /* ── JSON Field Mapping ──────────────────────────────────────────────────── */
 
 /**

@@ -50,6 +50,15 @@ float network_sensor_get_value(enum sensor_data_type type);
 void network_sensor_set_stale(bool is_stale);
 
 /**
+ * @brief Report which source the network sensor data comes from (local HTTP or cloud)
+ * Posts VIEW_EVENT_NETWORK_SENSOR_SOURCE when the source or the cloud data age changes.
+ *
+ * @param source NETWORK_SENSOR_SOURCE_LOCAL or NETWORK_SENSOR_SOURCE_CLOUD
+ * @param age_s  Cloud only: age of the sensor's last upload, in seconds; ignored for local
+ */
+void network_sensor_set_source(enum network_sensor_source source, int32_t age_s);
+
+/**
  * @brief Start the HTTP polling task
  * Called when WiFi connects
  */

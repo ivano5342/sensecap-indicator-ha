@@ -120,6 +120,16 @@ struct view_data_network_sensor_stale {
     bool is_stale;
 };
 
+enum network_sensor_source {
+    NETWORK_SENSOR_SOURCE_LOCAL = 0,  /* the sensor's own /json over local HTTP */
+    NETWORK_SENSOR_SOURCE_CLOUD,      /* PurpleAir cloud API fallback */
+};
+
+struct view_data_network_sensor_source {
+    enum network_sensor_source source;
+    int32_t age_s;  /* cloud only: age of the sensor's last upload when fetched */
+};
+
 struct view_data_sensor_history_data {
     enum sensor_data_type     sensor_type;
     struct sensor_data_average data_day[24];
@@ -234,6 +244,10 @@ enum {
     /* P: sensor/network_sensor_model.c  C: sensor/network_sensor_view.c
      * Payload: struct view_data_network_sensor_stale */
     VIEW_EVENT_NETWORK_SENSOR_STALE,
+
+    /* P: sensor/network_sensor_model.c  C: sensor/network_sensor_view.c
+     * Payload: struct view_data_network_sensor_source */
+    VIEW_EVENT_NETWORK_SENSOR_SOURCE,
 
     /* P: ha/ha_switch_screen.c  C: ha/ha_switch.c  Payload: struct view_data_ha_switch_data */
     VIEW_EVENT_HA_SWITCH_ST,

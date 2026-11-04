@@ -5,6 +5,7 @@
 #include "esp_log.h"
 #include <stdio.h>
 #include <stdint.h>
+#include <math.h>
 
 LV_FONT_DECLARE(lv_font_montserrat_24);
 LV_FONT_DECLARE(lv_font_montserrat_28);
@@ -40,26 +41,43 @@ static void _header_pulse_cb(void* obj, int32_t v) {
     lv_obj_set_style_text_opa((lv_obj_t*)obj, (lv_opa_t)v, LV_PART_MAIN | LV_STATE_DEFAULT);
 }
 
-/* Show or clear the stale state: header note plus dimmed AQI cards. Values stay as the last good reading. */
-static void _on_network_sensor_stale_event(void* handler_arg, esp_event_base_t base, int32_t id, void* event_data) {
-    if (base != VIEW_EVENT_BASE || id != VIEW_EVENT_NETWORK_SENSOR_STALE || event_data == NULL) {
-        return;
-    }
-    bool stale = ((struct view_data_network_sensor_stale*)event_data)->is_stale;
+/* Header state: stale and source are reported separately; the header shows both */
+static bool s_stale = false;
+static enum network_sensor_source s_source = NETWORK_SENSOR_SOURCE_LOCAL;
+static int32_t s_cloud_age_s = 0;
 
-    lv_port_sem_take();
+/* Header text and style from s_stale / s_source; dims the AQI cards while stale.
+ * Values stay as the last good reading. Caller holds the LVGL lock. */
+static void _refresh_header_locked(void) {
+    bool cloud = (s_source == NETWORK_SENSOR_SOURCE_CLOUD);
     if (s_header) {
-        lv_obj_set_style_text_color(s_header, stale ? lv_color_hex(0xFF8000) : lv_color_hex(0xFFFFFF),
-                                    LV_PART_MAIN | LV_STATE_DEFAULT);
+        char text[48];
+        if (s_stale) {
+            snprintf(text, sizeof(text), LV_SYMBOL_WARNING " STALE%s " LV_SYMBOL_WARNING, cloud ? " CLOUD" : "");
+        } else if (cloud) {
+            int32_t min = s_cloud_age_s / 60;
+            if (min < 1) {
+                snprintf(text, sizeof(text), "CLOUD  <1 min old");
+            } else if (min < 120) {
+                snprintf(text, sizeof(text), "CLOUD  %d min old", (int)min);
+            } else {
+                snprintf(text, sizeof(text), "CLOUD  %d h old", (int)(min / 60));
+            }
+        } else {
+            snprintf(text, sizeof(text), "Network Sensors");
+        }
+
+        lv_color_t color = s_stale ? lv_color_hex(0xFF8000) : (cloud ? lv_color_hex(0x40C0FF) : lv_color_hex(0xFFFFFF));
+        lv_obj_set_style_text_color(s_header, color, LV_PART_MAIN | LV_STATE_DEFAULT);
         /* 24 pt (~28 px line) fits between header y=4 and the cards at y=32 */
-        lv_obj_set_style_text_font(s_header, stale ? &lv_font_montserrat_24 : lv_theme_get_font_normal(s_header),
+        lv_obj_set_style_text_font(s_header, s_stale ? &lv_font_montserrat_24 : lv_theme_get_font_normal(s_header),
                                    LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_label_set_text(s_header, stale ? LV_SYMBOL_WARNING " STALE " LV_SYMBOL_WARNING : "Network Sensors");
-        lv_obj_align(s_header, LV_ALIGN_TOP_MID, 0, stale ? 4 : 8);
+        lv_label_set_text(s_header, text);
+        lv_obj_align(s_header, LV_ALIGN_TOP_MID, 0, s_stale ? 4 : 8);
 
         lv_anim_delete(s_header, _header_pulse_cb);
         lv_obj_set_style_text_opa(s_header, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
-        if (stale) {
+        if (s_stale) {
             lv_anim_t a;
             lv_anim_init(&a);
             lv_anim_set_var(&a, s_header);
@@ -73,9 +91,30 @@ static void _on_network_sensor_stale_event(void* handler_arg, esp_event_base_t b
     }
     for (int c = 0; c < NETWORK_SENSOR_COUNT; c++) {
         if (s_aqi_cards[c]) {
-            lv_obj_set_style_opa(s_aqi_cards[c], stale ? LV_OPA_40 : LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_opa(s_aqi_cards[c], s_stale ? LV_OPA_40 : LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
         }
     }
+}
+
+static void _on_network_sensor_stale_event(void* handler_arg, esp_event_base_t base, int32_t id, void* event_data) {
+    if (base != VIEW_EVENT_BASE || id != VIEW_EVENT_NETWORK_SENSOR_STALE || event_data == NULL) {
+        return;
+    }
+    lv_port_sem_take();
+    s_stale = ((struct view_data_network_sensor_stale*)event_data)->is_stale;
+    _refresh_header_locked();
+    lv_port_sem_give();
+}
+
+static void _on_network_sensor_source_event(void* handler_arg, esp_event_base_t base, int32_t id, void* event_data) {
+    if (base != VIEW_EVENT_BASE || id != VIEW_EVENT_NETWORK_SENSOR_SOURCE || event_data == NULL) {
+        return;
+    }
+    const struct view_data_network_sensor_source* src = (const struct view_data_network_sensor_source*)event_data;
+    lv_port_sem_take();
+    s_source = src->source;
+    s_cloud_age_s = src->age_s;
+    _refresh_header_locked();
     lv_port_sem_give();
 }
 
@@ -116,7 +155,11 @@ static void _on_network_sensor_event(void* handler_arg, esp_event_base_t base, i
     for (int i = 0; network_sensor_field_map[i].json_key != NULL; i++) {
         if (network_sensor_field_map[i].sensor_type == type) {
             char buf[32];
-            snprintf(buf, sizeof(buf), "%.2f %s", v->value, network_sensor_field_map[i].unit);
+            if (isnan(v->value)) {
+                snprintf(buf, sizeof(buf), "-- %s", network_sensor_field_map[i].unit);  /* no reading from this source */
+            } else {
+                snprintf(buf, sizeof(buf), "%.2f %s", v->value, network_sensor_field_map[i].unit);
+            }
 
             lv_port_sem_take();
             if (s_labels[i]) lv_label_set_text(s_labels[i], buf);
@@ -271,6 +314,8 @@ void network_sensor_view_init(lv_obj_t* tile_parent, esp_event_loop_handle_t eve
     esp_event_handler_register_with(event_handle, VIEW_EVENT_BASE, VIEW_EVENT_NETWORK_SENSOR_DATA, _on_network_sensor_event, NULL);
 
     esp_event_handler_register_with(event_handle, VIEW_EVENT_BASE, VIEW_EVENT_NETWORK_SENSOR_STALE, _on_network_sensor_stale_event, NULL);
+
+    esp_event_handler_register_with(event_handle, VIEW_EVENT_BASE, VIEW_EVENT_NETWORK_SENSOR_SOURCE, _on_network_sensor_source_event, NULL);
 
     ESP_LOGI(TAG, "network sensor view initialized");
 }

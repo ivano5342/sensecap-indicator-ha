@@ -10,6 +10,10 @@ RP2040 side of the SenseCAP Indicator.
 | `sensor.h` | Umbrella header for the Sensor domain. Its include guard is `SENSOR_H` for compatibility with existing feature checks. |
 | `sensor_model.h` | Sensor types, status/error definitions, RP2040 parser API, and current-value cache API. |
 | `sensor_model.c` | Parses RP2040 sensor packets, maintains the latest `SensorData` cache, and posts `VIEW_EVENT_SENSOR_DATA`. |
+| `network_sensor_http.c` | Polling task for the local PurpleAir `/json`, and the PurpleAir cloud fallback state machine (LOCAL/CLOUD). |
+| `network_sensor_cloud.c` | PurpleAir cloud settings (API key, read key, sensor index) in NVS. |
+| `network_sensor_cloud_parse.c` | Pure-C parser for the cloud API reply; computes AQI and colour. Host-tested by `scripts/test_network_sensor_cloud.py`. |
+| `aqi.c` | Pure-C US EPA PM2.5 AQI and category colour (pre-2024 breakpoints). |
 | `sensor_view.h` | Sensor view initialization API. |
 | `sensor_view.c` | Subscribes to `VIEW_EVENT_SENSOR_DATA` and updates LVGL labels. |
 

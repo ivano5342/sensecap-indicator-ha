@@ -32,6 +32,7 @@ def main() -> int:
     run("sdkconfig check tests", ["python3", "scripts/test_check_sdkconfig.py"])
     run("RGB LCD config", ["python3", "scripts/test_lcd_rgb_config.py"])
     run("UI geometry", ["python3", "scripts/test_ui_geometry.py"])
+    run("PurpleAir cloud parser and AQI", ["python3", "scripts/test_network_sensor_cloud.py"])
     run("Click deploy package", ["python3", "scripts/test_click_deploy_package.py"])
 
     if not args.skip_build:
