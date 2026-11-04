@@ -1,5 +1,6 @@
 #include "indicator_util.h"
 #include <esp_log.h>
+#include <sys/types.h> /* off_t for newlib regex.h */
 #include <regex.h>
 #include <stdio.h>
 #include <string.h>
