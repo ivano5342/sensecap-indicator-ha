@@ -23,7 +23,7 @@
    COLOR SETTINGS
  *====================*/
 /* 32-bit ARGB8888 — SDL2 native; avoids pixel-format conversion in the driver */
-#define LV_COLOR_DEPTH 32
+#define LV_COLOR_FORMAT_DEFAULT LV_COLOR_FORMAT_XRGB8888
 
 /*====================
    MEMORY SETTINGS

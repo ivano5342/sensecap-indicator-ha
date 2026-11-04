@@ -32,14 +32,14 @@ static void _sync_sleep_time_panel(void) {
 
 	if(lv_obj_has_state(s_sleep_mode_cfg, LV_STATE_CHECKED))
 	{
-		lv_obj_remove_flag(s_sleep_mode_time_panel, LV_OBJ_FLAG_HIDDEN);
+		lv_obj_set_hidden(s_sleep_mode_time_panel, false);
 	}
 	else
 	{
-		lv_obj_add_flag(s_sleep_mode_time_panel, LV_OBJ_FLAG_HIDDEN);
+		lv_obj_set_hidden(s_sleep_mode_time_panel, true);
 		if(s_display_keyboard)
 		{
-			lv_obj_add_flag(s_display_keyboard, LV_OBJ_FLAG_HIDDEN);
+			lv_obj_set_hidden(s_display_keyboard, true);
 		}
 	}
 }
@@ -63,11 +63,11 @@ static void _display_cfg_from_widgets(struct view_data_display* cfg) {
 static void _hide_display_modal(void) {
 	if(s_display_keyboard)
 	{
-		lv_obj_add_flag(s_display_keyboard, LV_OBJ_FLAG_HIDDEN);
+		lv_obj_set_hidden(s_display_keyboard, true);
 	}
 	if(s_display_modal)
 	{
-		lv_obj_add_flag(s_display_modal, LV_OBJ_FLAG_HIDDEN);
+		lv_obj_set_hidden(s_display_modal, true);
 	}
 }
 
@@ -97,7 +97,7 @@ static void _on_sleep_time_clicked(lv_event_t* e) {
 		return;
 	}
 
-	lv_obj_remove_flag(s_display_keyboard, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_set_hidden(s_display_keyboard, false);
 }
 
 static void _on_keyboard_done(lv_event_t* e) {
@@ -109,7 +109,7 @@ static void _on_keyboard_done(lv_event_t* e) {
 
 	if(s_display_keyboard)
 	{
-		lv_obj_add_flag(s_display_keyboard, LV_OBJ_FLAG_HIDDEN);
+		lv_obj_set_hidden(s_display_keyboard, true);
 	}
 	display_cfg_apply_event_cb(e);
 }
@@ -123,8 +123,9 @@ static void _ensure_display_modal(void) {
 	s_display_modal = lv_obj_create(lv_layer_top());
 	lv_obj_set_size(s_display_modal, CONFIG_LCD_EVB_SCREEN_WIDTH, CONFIG_LCD_EVB_SCREEN_HEIGHT);
 	lv_obj_set_align(s_display_modal, LV_ALIGN_CENTER);
-	lv_obj_add_flag(s_display_modal, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_remove_flag(s_display_modal, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
+	lv_obj_set_clickable(s_display_modal, true);
+	lv_obj_set_scrollable(s_display_modal, false);
+	lv_obj_set_gesture_bubble(s_display_modal, false);
 	lv_obj_set_style_bg_color(s_display_modal, lv_color_hex(0x101418),
 							  LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_bg_opa(s_display_modal, LV_OPA_COVER,
@@ -132,12 +133,12 @@ static void _ensure_display_modal(void) {
 	lv_obj_set_style_border_width(s_display_modal, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_radius(s_display_modal, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_pad_all(s_display_modal, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-	lv_obj_add_flag(s_display_modal, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_set_hidden(s_display_modal, true);
 
 	lv_obj_t* header = lv_obj_create(s_display_modal);
 	lv_obj_set_size(header, 480, 85);
 	lv_obj_set_align(header, LV_ALIGN_TOP_MID);
-	lv_obj_remove_flag(header, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_set_scrollable(header, false);
 	lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP,
 							LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_border_opa(header, LV_OPA_TRANSP,
@@ -172,7 +173,7 @@ static void _ensure_display_modal(void) {
 	lv_obj_t* brightness_panel = lv_obj_create(s_display_modal);
 	lv_obj_set_size(brightness_panel, 400, 100);
 	lv_obj_set_pos(brightness_panel, 40, 150);
-	lv_obj_remove_flag(brightness_panel, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_set_scrollable(brightness_panel, false);
 
 	lv_obj_t* brightness_title = lv_label_create(brightness_panel);
 	lv_label_set_text(brightness_title, "Brightness");
@@ -205,7 +206,7 @@ static void _ensure_display_modal(void) {
 	lv_obj_t* sleep_panel = lv_obj_create(s_display_modal);
 	lv_obj_set_size(sleep_panel, 400, 50);
 	lv_obj_set_pos(sleep_panel, 40, 270);
-	lv_obj_remove_flag(sleep_panel, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_set_scrollable(sleep_panel, false);
 
 	lv_obj_t* sleep_title = lv_label_create(sleep_panel);
 	lv_label_set_text(sleep_title, "Sleep Mode");
@@ -224,7 +225,7 @@ static void _ensure_display_modal(void) {
 	s_sleep_mode_time_panel = lv_obj_create(s_display_modal);
 	lv_obj_set_size(s_sleep_mode_time_panel, 400, 50);
 	lv_obj_set_pos(s_sleep_mode_time_panel, 40, 335);
-	lv_obj_remove_flag(s_sleep_mode_time_panel, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_set_scrollable(s_sleep_mode_time_panel, false);
 
 	lv_obj_t* after_label = lv_label_create(s_sleep_mode_time_panel);
 	lv_label_set_text(after_label, "After");
@@ -254,7 +255,7 @@ static void _ensure_display_modal(void) {
 	lv_keyboard_set_textarea(s_display_keyboard, s_sleep_mode_time_cfg);
 	lv_obj_set_size(s_display_keyboard, 480, 240);
 	lv_obj_set_align(s_display_keyboard, LV_ALIGN_BOTTOM_MID);
-	lv_obj_add_flag(s_display_keyboard, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_set_hidden(s_display_keyboard, true);
 	lv_obj_add_event_cb(s_display_keyboard, _on_keyboard_done,
 						LV_EVENT_READY, NULL);
 	lv_obj_add_event_cb(s_display_keyboard, _on_keyboard_done,
@@ -308,7 +309,7 @@ static void _show_display_modal(void) {
 	struct view_data_display cfg;
 	_display_cfg_get(&cfg);
 	_apply_display_cfg_to_widgets(&cfg);
-	lv_obj_remove_flag(s_display_modal, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_set_hidden(s_display_modal, false);
 	lv_obj_move_foreground(s_display_modal);
 }
 

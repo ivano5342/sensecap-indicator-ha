@@ -27,7 +27,7 @@ static void _on_unconnected_tap(lv_event_t *e);
 /* ── local wifi modal ───────────────────────────────────────────────── */
 
 static bool _wifi_modal_is_visible(void) {
-    return s_wifi_modal && !lv_obj_has_flag(s_wifi_modal, LV_OBJ_FLAG_HIDDEN);
+    return s_wifi_modal && !lv_obj_is_hidden(s_wifi_modal);
 }
 
 static bool s_discard_next_list = false;
@@ -39,7 +39,7 @@ static void _hide_wifi_modal(void) {
         s_connect_screen = NULL;
     }
     if(s_wifi_modal) {
-        lv_obj_add_flag(s_wifi_modal, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(s_wifi_modal, true);
         if(s_wifi_scan_pending) {
             s_discard_next_list = true;
         }
@@ -57,8 +57,9 @@ static void _ensure_wifi_modal(void) {
     s_wifi_modal = lv_obj_create(lv_layer_top());
     lv_obj_set_size(s_wifi_modal, CONFIG_LCD_EVB_SCREEN_WIDTH, CONFIG_LCD_EVB_SCREEN_HEIGHT);
     lv_obj_set_align(s_wifi_modal, LV_ALIGN_CENTER);
-    lv_obj_add_flag(s_wifi_modal, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_remove_flag(s_wifi_modal, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_set_clickable(s_wifi_modal, true);
+    lv_obj_set_scrollable(s_wifi_modal, false);
+    lv_obj_set_gesture_bubble(s_wifi_modal, false);
     lv_obj_set_style_bg_color(s_wifi_modal, lv_color_hex(0x101418),
                               LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(s_wifi_modal, LV_OPA_COVER,
@@ -66,12 +67,12 @@ static void _ensure_wifi_modal(void) {
     lv_obj_set_style_border_width(s_wifi_modal, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_radius(s_wifi_modal, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_all(s_wifi_modal, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_add_flag(s_wifi_modal, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(s_wifi_modal, true);
 
     lv_obj_t *header = lv_obj_create(s_wifi_modal);
     lv_obj_set_size(header, 480, 85);
     lv_obj_set_align(header, LV_ALIGN_TOP_MID);
-    lv_obj_remove_flag(header, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(header, false);
     lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP,
                             LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_opa(header, LV_OPA_TRANSP,
@@ -107,8 +108,8 @@ static void _ensure_wifi_modal(void) {
     lv_spinner_set_anim_params(s_wifi_spinner, 1000, 90);
     lv_obj_set_size(s_wifi_spinner, 50, 50);
     lv_obj_set_align(s_wifi_spinner, LV_ALIGN_CENTER);
-    lv_obj_remove_flag(s_wifi_spinner, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(s_wifi_spinner, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_clickable(s_wifi_spinner, false);
+    lv_obj_set_hidden(s_wifi_spinner, true);
 
     s_list_screen = wifi_list_screen_create(s_wifi_modal, s_wifi_spinner);
     wifi_list_screen_set_item_callbacks(s_list_screen, _on_connected_tap, _on_unconnected_tap);
@@ -118,7 +119,7 @@ static void _show_wifi_modal(void) {
     _ensure_wifi_modal();
     if(!s_wifi_modal) return;
 
-    lv_obj_remove_flag(s_wifi_modal, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(s_wifi_modal, false);
     lv_obj_move_foreground(s_wifi_modal);
     wifi_list_screen_show_spinner(s_list_screen);
 
@@ -142,7 +143,7 @@ static void _ensure_wifi_status_icon(void) {
     lv_obj_set_size(button, 60, 60);
     lv_obj_set_align(button, LV_ALIGN_TOP_RIGHT);
     lv_obj_set_pos(button, -10, 10);
-    lv_obj_remove_flag(button, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(button, false);
     lv_obj_set_style_bg_color(button, lv_color_hex(0x101418),
                               LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(button, LV_OPA_COVER,
@@ -152,8 +153,8 @@ static void _ensure_wifi_status_icon(void) {
     s_wifi_icon = lv_image_create(button);
     lv_image_set_src(s_wifi_icon, &ui_img_wifi_disconet_png);
     lv_obj_center(s_wifi_icon);
-    lv_obj_add_flag(s_wifi_icon, LV_OBJ_FLAG_ADV_HITTEST);
-    lv_obj_remove_flag(s_wifi_icon, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_adv_hittest(s_wifi_icon, true);
+    lv_obj_set_scrollable(s_wifi_icon, false);
 }
 
 /* ── list item tap callbacks (live here to access module state) ───────── */
@@ -187,7 +188,7 @@ static void _toast_close_cb(lv_timer_t *timer) {
     if(s_result_toast) {
         lv_obj_delete(s_result_toast);
         s_result_toast = NULL;
-        lv_obj_remove_flag(lv_layer_top(), LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_clickable(lv_layer_top(), false);
         lv_obj_set_style_bg_opa(lv_layer_top(), LV_OPA_TRANSP, 0);
     }
 }
@@ -196,7 +197,7 @@ static void _show_connect_result(struct view_data_wifi_connet_ret_msg *p_msg) {
     s_result_toast = lv_obj_create(lv_layer_top());
     lv_obj_set_size(s_result_toast, 300, 150);
     lv_obj_set_align(s_result_toast, LV_ALIGN_CENTER);
-    lv_obj_remove_flag(s_result_toast, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(s_result_toast, false);
     lv_obj_set_style_bg_color(s_result_toast, lv_palette_main(LV_PALETTE_GREY), 0);
 
     lv_obj_t *msg = lv_label_create(s_result_toast);

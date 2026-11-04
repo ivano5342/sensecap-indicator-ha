@@ -23,8 +23,8 @@ typedef struct ha_switch_entity {
     int qos;
 } ha_switch_entity_t;
 
-static ha_switch_entity_t ha_switch_entities[CONFIG_HA_SWITCH_ENTITY_NUM];
-static int switch_state[CONFIG_HA_SWITCH_ENTITY_NUM];
+static ha_switch_entity_t ha_switch_entities[HA_SWITCH_ENTITY_NUM];
+static int switch_state[HA_SWITCH_ENTITY_NUM];
 static TaskHandle_t restore_task_handle = NULL;
 static ha_switch_screen_t *_screen = NULL;
 
@@ -57,10 +57,12 @@ static void publish_switch_state(const struct view_data_ha_switch_data *switch_d
         return;
     }
 
-    static const char *switch_keys[] = CONFIG_SWITCH_VALUE_KEYS;
-    static const char *switch_topics[] = CONFIG_SWITCH_TOPICS_STATE;
+    static const char *switch_keys[] = HA_SWITCH_VALUE_KEYS;
+    static const char *switch_topics[] = HA_SWITCH_TOPICS_STATE;
+    _Static_assert(HA_ARRAY_LEN(switch_keys) == HA_SWITCH_ENTITY_NUM, "HA_SWITCH_VALUE_KEYS size");
+    _Static_assert(HA_ARRAY_LEN(switch_topics) == HA_SWITCH_ENTITY_NUM, "HA_SWITCH_TOPICS_STATE size");
 
-    if (switch_data->index >= 0 && switch_data->index < CONFIG_HA_SWITCH_ENTITY_NUM) {
+    if (switch_data->index < HA_SWITCH_ENTITY_NUM) {
         char data_buf[MAX_DATA_BUF_LEN];
         int len = snprintf(data_buf, sizeof(data_buf), "{\"%s\": %d}", switch_keys[switch_data->index], (int)switch_data->value);
 
@@ -85,7 +87,7 @@ static void restore_data_task(void *args)
 {
     ESP_LOGI(TAG, "Starting restore data task");
 
-    for (int i = 0; i < CONFIG_HA_SWITCH_ENTITY_NUM; i++) {
+    for (int i = 0; i < HA_SWITCH_ENTITY_NUM; i++) {
         struct view_data_ha_switch_data switch_data = {.index = i, .value = switch_state[i]};
         esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_HA_SWITCH_SET, &switch_data, sizeof(switch_data), portMAX_DELAY);
 
@@ -124,17 +126,18 @@ static void view_event_handler(void *handler_args, esp_event_base_t base, int32_
 
 void ha_switch_init(void)
 {
-    const char *switch_keys[] = CONFIG_SWITCH_VALUE_KEYS;
-    const char *switch_topics_state[] = CONFIG_SWITCH_TOPICS_STATE;
-    const char *switch_topics_set[] = CONFIG_SWITCH_TOPICS_SET;
+    const char *switch_keys[] = HA_SWITCH_VALUE_KEYS;
+    const char *switch_topics_state[] = HA_SWITCH_TOPICS_STATE;
+    const char *switch_topics_set[] = HA_SWITCH_TOPICS_SET;
+    _Static_assert(HA_ARRAY_LEN(switch_topics_set) == HA_SWITCH_ENTITY_NUM, "HA_SWITCH_TOPICS_SET size");
 
-    for (int i = 0; i < CONFIG_HA_SWITCH_ENTITY_NUM; i++) {
+    for (int i = 0; i < HA_SWITCH_ENTITY_NUM; i++) {
         ha_switch_entities[i] = (ha_switch_entity_t){
             .index = i,
             .key = (char *)switch_keys[i],
             .topic_set = (char *)switch_topics_set[i],
             .topic_state = (char *)switch_topics_state[i],
-            .qos = CONFIG_TOPIC_SWITCH_QOS,
+            .qos = HA_TOPIC_SWITCH_QOS,
         };
     }
 
@@ -146,7 +149,7 @@ void ha_switch_init(void)
 
 void ha_switch_subscribe(esp_mqtt_client_handle_t client)
 {
-    for (int i = 0; i < CONFIG_HA_SWITCH_ENTITY_NUM; i++) {
+    for (int i = 0; i < HA_SWITCH_ENTITY_NUM; i++) {
         int msg_id = esp_mqtt_client_subscribe(client, ha_switch_entities[i].topic_set, ha_switch_entities[i].qos);
         ESP_LOGI(TAG, "subscribe:%s, msg_id=%d", ha_switch_entities[i].topic_set, msg_id);
     }
@@ -173,7 +176,7 @@ int ha_switch_on_mqtt_data(const char *topic, int topic_len, const char *data, i
     ESP_LOGI(TAG, "c_key = %s", c_key->string);
     size_t key_len = strlen(c_key->string);
 
-    for (int i = 0; i < CONFIG_HA_SWITCH_ENTITY_NUM; i++) {
+    for (int i = 0; i < HA_SWITCH_ENTITY_NUM; i++) {
         if (strncmp(c_key->string, ha_switch_entities[i].key, key_len) == 0) {
             cJSON *cjson_item = cJSON_GetObjectItem(root, ha_switch_entities[i].key);
             if (cjson_item != NULL && cJSON_IsNumber(cjson_item)) {

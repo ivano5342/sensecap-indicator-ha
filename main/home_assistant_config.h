@@ -1,10 +1,13 @@
 /**
  * @file home_assistant_config.h
- * @date  23 July 2024
-
- * @author Spencer Yan
+ * @brief Compile-time Home Assistant / MQTT settings.
  *
- * @note 
+ * Macros here use the HA_ prefix on purpose: the CONFIG_ prefix belongs to
+ * Kconfig (sdkconfig.h), and sharing it risks silent collisions.
+ *
+ * Topic names and JSON keys are product protocol. Changing them breaks
+ * existing Home Assistant setups; keep them in sync with
+ * examples/homeassistant/ and the README "MQTT Protocol" section.
  *
  * @copyright © 2024, Seeed Studio
  */
@@ -16,141 +19,77 @@
 extern "C" {
 #endif
 
+/* ── Default broker ─────────────────────────────────────────────────────────
+ * Used only until a broker config is saved to NVS (touchscreen or the
+ * `setmqtt` console command). The default is a PUBLIC test broker.
+ *   "mqtt://homeassistant.local"   mDNS name
+ *   "mqtt://192.168.1.10"          IPv4
+ */
+#define HA_DEFAULT_BROKER_URL          "mqtt://broker.emqx.io"
+#define HA_DEFAULT_MQTT_CLIENT_ID      "indicator-id"
+#define HA_DEFAULT_MQTT_USERNAME       "indicator-usr"
+#define HA_DEFAULT_MQTT_PASSWORD       "indicator-password"
 
-// #define CONFIG_BROKER_URL                        "mqtt://homeassistant.local" /* domain */
-#define CONFIG_BROKER_URL                        "mqtt://broker.emqx.io" /* for receive testing */
-// #define CONFIG_BROKER_URL                        "mqtt://192.168.12.253" /* IPV4 */
-#define CONFIG_MQTT_CLIENT_ID                    "indicator-id"
-#define CONFIG_MQTT_USERNAME                     "indicator-usr"
-#define CONFIG_MQTT_PASSWORD                     "indicator-password"
+/* ── Topics ─────────────────────────────────────────────────────────────── */
+#define HA_TOPIC_SENSOR_DATA           "indicator/sensor"
+#define HA_TOPIC_SENSOR_DATA_QOS       0
 
-#define CONFIG_HA_SENSOR_ENTITY_NUM              6
-#define CONFIG_HA_SWITCH_ENTITY_NUM              8
+#define HA_TOPIC_SWITCH_STATE          "indicator/switch/state"
+#define HA_TOPIC_SWITCH_SET            "indicator/switch/set"
+#define HA_TOPIC_SWITCH_QOS            1
 
-// topic
-#define CONFIG_TOPIC_SENSOR_DATA                 "indicator/sensor"
-#define CONFIG_TOPIC_SENSOR_DATA_QOS             0
+/* ── Built-in sensor JSON keys (published on HA_TOPIC_SENSOR_DATA) ──────── */
+#define HA_SENSOR_KEY_CO2              "co2"
+#define HA_SENSOR_KEY_TVOC             "tvoc"
+#define HA_SENSOR_KEY_TEMP             "temp"
+#define HA_SENSOR_KEY_HUMIDITY         "humidity"
 
-#define CONFIG_TOPIC_SWITCH_STATE                "indicator/switch/state"
-#define CONFIG_TOPIC_SWITCH_SET                  "indicator/switch/set"
-#define CONFIG_TOPIC_SWITCH_QOS                  1
+#define HA_SENSOR_TEMP_UI_UNIT         "°C"
 
-// buildin sensor
-#define CONFIG_SENSOR_BUILDIN_CO2_VALUE_KEY      "co2"
-#define CONFIG_SENSOR_BUILDIN_TVOC_VALUE_KEY     "tvoc"
-#define CONFIG_SENSOR_BUILDIN_TEMP_VALUE_KEY     "temp"
-#define CONFIG_SENSOR_BUILDIN_HUMIDITY_VALUE_KEY "humidity"
-#define CONFIG_SENSOR_BUILDIN_TOPIC_DATA         CONFIG_TOPIC_SENSOR_DATA
+/* ── Sensor entities (subscribed; see ha_sensor.c) ──────────────────────────
+ * One entry per entity, in index order. Arrays must have
+ * HA_SENSOR_ENTITY_NUM entries (checked at compile time in ha_sensor.c).
+ */
+#define HA_SENSOR_ENTITY_NUM           6
 
-// sensor1
-#define CONFIG_SENSOR1_VALUE_KEY                 "temp"
-#define CONFIG_SENSOR1_UI_UNIT                   "°C"
-#define CONFIG_SENSOR1_UI_NAME                   "Temp"
-#define CONFIG_SENSOR1_TOPIC_DATA                CONFIG_TOPIC_SENSOR_DATA
-
-// sensor2
-#define CONFIG_SENSOR2_VALUE_KEY                 "humidity"
-#define CONFIG_SENSOR2_UI_UNIT                   "%"
-#define CONFIG_SENSOR2_UI_NAME                   "Humidity"
-#define CONFIG_SENSOR2_TOPIC_DATA                CONFIG_TOPIC_SENSOR_DATA
-
-// sensor3
-#define CONFIG_SENSOR3_VALUE_KEY                 "tvoc"
-#define CONFIG_SENSOR3_UI_UNIT                   ""
-#define CONFIG_SENSOR3_UI_NAME                   "tVOC"
-#define CONFIG_SENSOR3_TOPIC_DATA                CONFIG_TOPIC_SENSOR_DATA
-
-// sensor4
-#define CONFIG_SENSOR4_VALUE_KEY                 "co2"
-#define CONFIG_SENSOR4_UI_UNIT                   "ppm"
-#define CONFIG_SENSOR4_UI_NAME                   "CO2"
-#define CONFIG_SENSOR4_TOPIC_DATA                CONFIG_TOPIC_SENSOR_DATA
-
-// sensor5
-#define CONFIG_SENSOR5_VALUE_KEY                 "temp"
-#define CONFIG_SENSOR5_UI_UNIT                   "°C"
-#define CONFIG_SENSOR5_UI_NAME                   "Temp"
-#define CONFIG_SENSOR5_TOPIC_DATA                CONFIG_TOPIC_SENSOR_DATA
-
-// sensor6
-#define CONFIG_SENSOR6_VALUE_KEY                 "humidity"
-#define CONFIG_SENSOR6_UI_UNIT                   "%"
-#define CONFIG_SENSOR6_UI_NAME                   "Humidity"
-#define CONFIG_SENSOR6_TOPIC_DATA                CONFIG_TOPIC_SENSOR_DATA
-
-// switch1
-#define CONFIG_SWITCH1_VALUE_KEY                 "switch1"
-#define CONFIG_SWITCH1_UI_NAME                   "Switch1"
-#define CONFIG_SWITCH1_TOPIC_STATE               CONFIG_TOPIC_SWITCH_STATE
-#define CONFIG_SWITCH1_TOPIC_SET                 CONFIG_TOPIC_SWITCH_SET
-
-// switch2
-#define CONFIG_SWITCH2_VALUE_KEY                 "switch2"
-#define CONFIG_SWITCH2_UI_NAME                   "Switch2"
-#define CONFIG_SWITCH2_TOPIC_STATE               CONFIG_TOPIC_SWITCH_STATE
-#define CONFIG_SWITCH2_TOPIC_SET                 CONFIG_TOPIC_SWITCH_SET
-
-// switch3
-#define CONFIG_SWITCH3_VALUE_KEY                 "switch3"
-#define CONFIG_SWITCH3_UI_NAME                   "Switch3"
-#define CONFIG_SWITCH3_TOPIC_STATE               CONFIG_TOPIC_SWITCH_STATE
-#define CONFIG_SWITCH3_TOPIC_SET                 CONFIG_TOPIC_SWITCH_SET
-
-// switch4
-#define CONFIG_SWITCH4_VALUE_KEY                 "switch4"
-#define CONFIG_SWITCH4_UI_NAME                   "Switch4"
-#define CONFIG_SWITCH4_TOPIC_STATE               CONFIG_TOPIC_SWITCH_STATE
-#define CONFIG_SWITCH4_TOPIC_SET                 CONFIG_TOPIC_SWITCH_SET
-
-// switch5
-#define CONFIG_SWITCH5_VALUE_KEY                 "switch5"
-#define CONFIG_SWITCH5_UI_NAME                   "Switch5"
-#define CONFIG_SWITCH5_TOPIC_STATE               CONFIG_TOPIC_SWITCH_STATE
-#define CONFIG_SWITCH5_TOPIC_SET                 CONFIG_TOPIC_SWITCH_SET
-
-// switch6
-#define CONFIG_SWITCH6_VALUE_KEY                 "switch6"
-#define CONFIG_SWITCH6_UI_NAME                   "Switch6"
-#define CONFIG_SWITCH6_TOPIC_STATE               CONFIG_TOPIC_SWITCH_STATE
-#define CONFIG_SWITCH6_TOPIC_SET                 CONFIG_TOPIC_SWITCH_SET
-
-// switch7
-#define CONFIG_SWITCH7_VALUE_KEY                 "switch7"
-#define CONFIG_SWITCH7_UI_NAME                   "Switch7"
-#define CONFIG_SWITCH7_TOPIC_STATE               CONFIG_TOPIC_SWITCH_STATE
-#define CONFIG_SWITCH7_TOPIC_SET                 CONFIG_TOPIC_SWITCH_SET
-
-// switch8
-#define CONFIG_SWITCH8_VALUE_KEY                 "switch8"
-#define CONFIG_SWITCH8_UI_NAME                   "Switch8"
-#define CONFIG_SWITCH8_TOPIC_STATE               CONFIG_TOPIC_SWITCH_STATE
-#define CONFIG_SWITCH8_TOPIC_SET                 CONFIG_TOPIC_SWITCH_SET
-
-// New arrays for simplified entity initialization
-#define CONFIG_SENSOR_VALUE_KEYS { \
-    CONFIG_SENSOR1_VALUE_KEY, CONFIG_SENSOR2_VALUE_KEY, CONFIG_SENSOR3_VALUE_KEY, \
-    CONFIG_SENSOR4_VALUE_KEY, CONFIG_SENSOR5_VALUE_KEY, CONFIG_SENSOR6_VALUE_KEY \
+#define HA_SENSOR_VALUE_KEYS {                                   \
+    HA_SENSOR_KEY_TEMP, HA_SENSOR_KEY_HUMIDITY, HA_SENSOR_KEY_TVOC, \
+    HA_SENSOR_KEY_CO2,  HA_SENSOR_KEY_TEMP,     HA_SENSOR_KEY_HUMIDITY \
 }
 
-#define CONFIG_SENSOR_TOPICS { \
-    CONFIG_SENSOR1_TOPIC_DATA, CONFIG_SENSOR2_TOPIC_DATA, CONFIG_SENSOR3_TOPIC_DATA, \
-    CONFIG_SENSOR4_TOPIC_DATA, CONFIG_SENSOR5_TOPIC_DATA, CONFIG_SENSOR6_TOPIC_DATA \
+#define HA_SENSOR_TOPICS {                                       \
+    HA_TOPIC_SENSOR_DATA, HA_TOPIC_SENSOR_DATA, HA_TOPIC_SENSOR_DATA, \
+    HA_TOPIC_SENSOR_DATA, HA_TOPIC_SENSOR_DATA, HA_TOPIC_SENSOR_DATA  \
 }
 
-#define CONFIG_SWITCH_VALUE_KEYS { \
-    CONFIG_SWITCH1_VALUE_KEY, CONFIG_SWITCH2_VALUE_KEY, CONFIG_SWITCH3_VALUE_KEY, CONFIG_SWITCH4_VALUE_KEY, \
-    CONFIG_SWITCH5_VALUE_KEY, CONFIG_SWITCH6_VALUE_KEY, CONFIG_SWITCH7_VALUE_KEY, CONFIG_SWITCH8_VALUE_KEY \
+/* ── Switch entities (see ha_switch.c / ha_switch_screen.c) ─────────────────
+ * Index i maps to JSON key HA_SWITCH_VALUE_KEYS[i] on both switch topics.
+ * switch5 and switch8 are numeric sliders; the rest are on/off switches.
+ * Arrays must have HA_SWITCH_ENTITY_NUM entries (checked at compile time).
+ */
+#define HA_SWITCH_ENTITY_NUM           8
+
+#define HA_SWITCH_VALUE_KEYS {                                   \
+    "switch1", "switch2", "switch3", "switch4",                  \
+    "switch5", "switch6", "switch7", "switch8"                   \
 }
 
-#define CONFIG_SWITCH_TOPICS_STATE { \
-    CONFIG_SWITCH1_TOPIC_STATE, CONFIG_SWITCH2_TOPIC_STATE, CONFIG_SWITCH3_TOPIC_STATE, CONFIG_SWITCH4_TOPIC_STATE, \
-    CONFIG_SWITCH5_TOPIC_STATE, CONFIG_SWITCH6_TOPIC_STATE, CONFIG_SWITCH7_TOPIC_STATE, CONFIG_SWITCH8_TOPIC_STATE \
+#define HA_SWITCH_UI_NAMES {                                     \
+    "Switch1", "Switch2", "Switch3", "Switch4",                  \
+    "Switch5", "Switch6", "Switch7", "Switch8"                   \
 }
 
-#define CONFIG_SWITCH_TOPICS_SET { \
-    CONFIG_SWITCH1_TOPIC_SET, CONFIG_SWITCH2_TOPIC_SET, CONFIG_SWITCH3_TOPIC_SET, CONFIG_SWITCH4_TOPIC_SET, \
-    CONFIG_SWITCH5_TOPIC_SET, CONFIG_SWITCH6_TOPIC_SET, CONFIG_SWITCH7_TOPIC_SET, CONFIG_SWITCH8_TOPIC_SET \
+#define HA_SWITCH_TOPICS_STATE {                                 \
+    HA_TOPIC_SWITCH_STATE, HA_TOPIC_SWITCH_STATE, HA_TOPIC_SWITCH_STATE, HA_TOPIC_SWITCH_STATE, \
+    HA_TOPIC_SWITCH_STATE, HA_TOPIC_SWITCH_STATE, HA_TOPIC_SWITCH_STATE, HA_TOPIC_SWITCH_STATE  \
 }
+
+#define HA_SWITCH_TOPICS_SET {                                   \
+    HA_TOPIC_SWITCH_SET, HA_TOPIC_SWITCH_SET, HA_TOPIC_SWITCH_SET, HA_TOPIC_SWITCH_SET, \
+    HA_TOPIC_SWITCH_SET, HA_TOPIC_SWITCH_SET, HA_TOPIC_SWITCH_SET, HA_TOPIC_SWITCH_SET  \
+}
+
+#define HA_ARRAY_LEN(a) (sizeof(a) / sizeof((a)[0]))
 
 #ifdef __cplusplus
 } /*extern "C"*/

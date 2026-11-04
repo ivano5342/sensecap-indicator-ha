@@ -56,10 +56,10 @@ static void show_message_box(const char *message, lv_color_t color)
 static void _hide_broker_modal(void)
 {
     if (s_broker_keyboard) {
-        lv_obj_add_flag(s_broker_keyboard, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(s_broker_keyboard, true);
     }
     if (s_broker_modal) {
-        lv_obj_add_flag(s_broker_modal, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(s_broker_modal, true);
     }
 }
 
@@ -88,7 +88,7 @@ static void _on_ip_textarea_clicked(lv_event_t *e)
         return;
     }
 
-    lv_obj_remove_flag(s_broker_keyboard, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(s_broker_keyboard, false);
 }
 
 static void _on_broker_keyboard_done(lv_event_t *e)
@@ -99,7 +99,7 @@ static void _on_broker_keyboard_done(lv_event_t *e)
     }
 
     if (s_broker_keyboard) {
-        lv_obj_add_flag(s_broker_keyboard, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(s_broker_keyboard, true);
     }
 }
 
@@ -112,8 +112,9 @@ static void _ensure_broker_modal(void)
     s_broker_modal = lv_obj_create(lv_layer_top());
     lv_obj_set_size(s_broker_modal, CONFIG_LCD_EVB_SCREEN_WIDTH, CONFIG_LCD_EVB_SCREEN_HEIGHT);
     lv_obj_set_align(s_broker_modal, LV_ALIGN_CENTER);
-    lv_obj_add_flag(s_broker_modal, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_remove_flag(s_broker_modal, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_set_clickable(s_broker_modal, true);
+    lv_obj_set_scrollable(s_broker_modal, false);
+    lv_obj_set_gesture_bubble(s_broker_modal, false);
     lv_obj_set_style_bg_color(s_broker_modal, lv_color_hex(0x101418),
                               LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(s_broker_modal, LV_OPA_COVER,
@@ -121,12 +122,12 @@ static void _ensure_broker_modal(void)
     lv_obj_set_style_border_width(s_broker_modal, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_radius(s_broker_modal, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_all(s_broker_modal, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_add_flag(s_broker_modal, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(s_broker_modal, true);
 
     lv_obj_t *header = lv_obj_create(s_broker_modal);
     lv_obj_set_size(header, 480, 85);
     lv_obj_set_align(header, LV_ALIGN_TOP_MID);
-    lv_obj_remove_flag(header, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(header, false);
     lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP,
                             LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_opa(header, LV_OPA_TRANSP,
@@ -162,7 +163,7 @@ static void _ensure_broker_modal(void)
     lv_obj_set_size(container, 420, 160);
     lv_obj_set_align(container, LV_ALIGN_TOP_MID);
     lv_obj_set_y(container, 120);
-    lv_obj_remove_flag(container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(container, false);
 
     lv_obj_t *input_title = lv_label_create(container);
     lv_label_set_text(input_title, "MQTT Broker IP");
@@ -207,7 +208,7 @@ static void _ensure_broker_modal(void)
     lv_keyboard_set_textarea(s_broker_keyboard, s_broker_ip_textarea);
     lv_obj_set_size(s_broker_keyboard, 480, 240);
     lv_obj_set_align(s_broker_keyboard, LV_ALIGN_BOTTOM_MID);
-    lv_obj_add_flag(s_broker_keyboard, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(s_broker_keyboard, true);
     lv_obj_add_event_cb(s_broker_keyboard, _on_broker_keyboard_done,
                         LV_EVENT_READY, NULL);
     lv_obj_add_event_cb(s_broker_keyboard, _on_broker_keyboard_done,
@@ -238,7 +239,7 @@ static void _show_broker_modal(void)
         update_ip_textfield(broker_url);
     }
     if (s_broker_modal) {
-        lv_obj_remove_flag(s_broker_modal, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(s_broker_modal, false);
         lv_obj_move_foreground(s_broker_modal);
     }
 }
@@ -315,7 +316,7 @@ static void view_event_handler(void *handler_args, esp_event_base_t base, int32_
 
 esp_err_t ha_cfg_get(ha_cfg_interface *ha_cfg)
 {
-    int len = sizeof(ha_cfg_interface);
+    size_t len = sizeof(ha_cfg_interface);
     memset(ha_cfg, 0, sizeof(ha_cfg_interface));
     esp_err_t err = indicator_nvs_read(MQTT_HA_CFG_STORAGE, ha_cfg, &len);
     if (err == ESP_OK && len == sizeof(ha_cfg_interface)) {
@@ -326,10 +327,10 @@ esp_err_t ha_cfg_get(ha_cfg_interface *ha_cfg)
         } else {
             ESP_LOGI(TAG, "mqtt broker cfg read err:%d", err);
         }
-        strlcpy(ha_cfg->broker_url, CONFIG_BROKER_URL, sizeof(ha_cfg->broker_url));
-        strlcpy(ha_cfg->client_id, CONFIG_MQTT_CLIENT_ID, sizeof(ha_cfg->client_id));
-        strlcpy(ha_cfg->username, CONFIG_MQTT_USERNAME, sizeof(ha_cfg->username));
-        strlcpy(ha_cfg->password, CONFIG_MQTT_PASSWORD, sizeof(ha_cfg->password));
+        strlcpy(ha_cfg->broker_url, HA_DEFAULT_BROKER_URL, sizeof(ha_cfg->broker_url));
+        strlcpy(ha_cfg->client_id, HA_DEFAULT_MQTT_CLIENT_ID, sizeof(ha_cfg->client_id));
+        strlcpy(ha_cfg->username, HA_DEFAULT_MQTT_USERNAME, sizeof(ha_cfg->username));
+        strlcpy(ha_cfg->password, HA_DEFAULT_MQTT_PASSWORD, sizeof(ha_cfg->password));
     }
     return err;
 }

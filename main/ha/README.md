@@ -81,7 +81,7 @@ User changes broker IP
 
 1. Add a new `_update_xxx()` function in `ha_switch_screen.c`
 2. Add a slot entry in `ha_switch_screen_create()` pointing to the locally-created widget and updater
-3. Extend `CONFIG_HA_SWITCH_ENTITY_NUM` in `home_assistant_config.h` if adding a new entity
+3. Extend `HA_SWITCH_ENTITY_NUM` in `home_assistant_config.h` if adding a new entity
 
 ## Extending to a New Feature Slice
 

@@ -54,7 +54,7 @@ static SensorCardSpec sensor_card_specs[] = {
 		.type = SHT41_SENSOR_TEMP,
 		.icon = &ui_img_ic_temp_png,
 		.name = "Temp",
-		.unit = CONFIG_SENSOR1_UI_UNIT,
+		.unit = HA_SENSOR_TEMP_UI_UNIT,
 		.accent_color = 0xECBF41,
 		.x = 22,
 		.y = 96,
@@ -92,7 +92,7 @@ static void sensor_view_create_header(lv_obj_t* tile) {
 	lv_obj_t* header = lv_obj_create(tile);
 	lv_obj_set_size(header, 480, 85);
 	lv_obj_set_pos(header, 0, 0);
-	lv_obj_remove_flag(header, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_set_scrollable(header, false);
 	lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_border_width(header, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_pad_all(header, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -112,7 +112,7 @@ static void sensor_view_create_card(lv_obj_t* tile, SensorCardSpec* spec) {
 	lv_obj_t* card = lv_obj_create(tile);
 	lv_obj_set_size(card, SENSOR_CARD_WIDTH, SENSOR_CARD_HEIGHT);
 	lv_obj_set_pos(card, spec->x, spec->y);
-	lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_set_scrollable(card, false);
 	lv_obj_set_style_radius(card, 12, LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_bg_color(card, lv_color_hex(0x282828), LV_PART_MAIN | LV_STATE_DEFAULT);
 	lv_obj_set_style_bg_opa(card, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -122,7 +122,7 @@ static void sensor_view_create_card(lv_obj_t* tile, SensorCardSpec* spec) {
 	lv_obj_t* icon = lv_image_create(card);
 	lv_image_set_src(icon, spec->icon);
 	lv_obj_set_pos(icon, 69, 22);
-	lv_obj_remove_flag(icon, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_set_scrollable(icon, false);
 
 	lv_obj_t* data = lv_label_create(card);
 	lv_obj_set_width(data, 100);

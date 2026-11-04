@@ -18,7 +18,7 @@ static void nav_style_base_obj(lv_obj_t *obj) {
 }
 
 static void nav_style_static_obj(lv_obj_t *obj) {
-	lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_set_scrollable(obj, false);
 	nav_style_base_obj(obj);
 }
 
@@ -40,9 +40,9 @@ int nav_init(void) {
 	lv_obj_set_size(s_tileview, NAV_TILE_WIDTH, NAV_TILE_HEIGHT);
 	lv_obj_set_pos(s_tileview, 0, 0);
 	lv_obj_set_scrollbar_mode(s_tileview, LV_SCROLLBAR_MODE_OFF);
-	lv_obj_remove_flag(s_tileview, LV_OBJ_FLAG_SCROLL_ELASTIC |
-								  LV_OBJ_FLAG_SCROLL_MOMENTUM |
-								  LV_OBJ_FLAG_SCROLL_CHAIN);
+	lv_obj_set_scroll_elastic(s_tileview, false);
+	lv_obj_set_scroll_momentum(s_tileview, false);
+	lv_obj_set_scroll_chain(s_tileview, false);
 	nav_style_base_obj(s_tileview);
 
 	for (int i = 0; i < NAV_TILE_COUNT; i++) {
