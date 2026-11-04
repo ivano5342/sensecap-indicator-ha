@@ -1,69 +1,68 @@
-# This file was generated using idf.py save-defconfig. It can be edited manually.
-# Espressif IoT Development Framework (ESP-IDF) 5.4.x Project Minimal Configuration
+# Project defaults for the SenseCAP Indicator (ESP32-S3).
+# Applied when `sdkconfig` does not exist; `./dev build` regenerates it.
+# Keep this file minimal: only values that differ from ESP-IDF/LVGL defaults.
 
-
+# ── Target ───────────────────────────────────────────────────────────────────
 CONFIG_IDF_TARGET="esp32s3"
-
-
+# Required for the 120 MHz PSRAM option below.
 CONFIG_IDF_EXPERIMENTAL_FEATURES=y
 
-CONFIG_SPIRAM=y
-CONFIG_SPIRAM_SPEED_120M=y
-CONFIG_SPIRAM_MODE_OCT=y
-CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
-CONFIG_SPIRAM_RODATA=y
-
-
-CONFIG_COMPILER_OPTIMIZATION_PERF=y
+# ── CPU / compiler ───────────────────────────────────────────────────────────
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+CONFIG_FREERTOS_HZ=1000
 
-# CONFIG_ESP32S3_DATA_CACHE_64KB=y
-# CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
-# CONFIG_ESP_IPC_TASK_STACK_SIZE=4096
-
-# CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
-# CONFIG_ESP_SLEEP_FLASH_LEAKAGE_WORKAROUND=n
-# CONFIG_ESP_SLEEP_PSRAM_LEAKAGE_WORKAROUND=n
-# CONFIG_ESP_PHY_REDUCE_TX_POWER=y
-
+# ── Flash (8 MB QIO @ 120 MHz) ───────────────────────────────────────────────
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 CONFIG_ESPTOOLPY_FLASHFREQ_120M=y
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+# Flash > 80 MHz needs High Performance Mode. These two lines select explicitly
+# what the "auto" defaults already resolve to on ESP32-S3 (HPM on, HPM-DC off
+# because the bootloader is not built DC-aware), which silences ESP-IDF's
+# build-time #warnings without changing the resulting configuration.
+CONFIG_SPI_FLASH_HPM_ENA=y
+CONFIG_SPI_FLASH_HPM_DC_DISABLE=y
 
+# ── Partition table (see partitions.csv) ─────────────────────────────────────
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
 CONFIG_PARTITION_TABLE_OFFSET=0x8000
 
+# ── PSRAM (octal @ 120 MHz) ──────────────────────────────────────────────────
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_120M=y
+CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
+CONFIG_SPIRAM_RODATA=y
 
-CONFIG_FREERTOS_HZ=1000
-# CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+# ── Legacy drivers ───────────────────────────────────────────────────────────
+# Vendor components under components/ (bsp, bus, iot_button, lora) still use the
+# legacy ADC/I2S/RMT driver APIs. They work on ESP-IDF 5.4; silence the header
+# deprecation #warnings until those components are migrated.
+CONFIG_ADC_SUPPRESS_DEPRECATE_WARN=y
+CONFIG_ADC_CALI_SUPPRESS_DEPRECATE_WARN=y
+CONFIG_I2S_SUPPRESS_DEPRECATE_WARN=y
+CONFIG_RMT_SUPPRESS_DEPRECATE_WARN=y
 
-
+# ── LCD (components/bsp) ─────────────────────────────────────────────────────
 CONFIG_LCD_AVOID_TEAR=y
 CONFIG_LCD_LVGL_FULL_REFRESH=y
 CONFIG_LCD_TASK_REFRESH_TIME=10
+
+# ── LVGL 9 ───────────────────────────────────────────────────────────────────
 CONFIG_LV_DEF_REFR_PERIOD=10
-
-
-# CONFIG_LV_CONF_MINIMAL=y
-# LVGL 9: route lv_malloc() to the C library heap (ESP heap incl. PSRAM).
-# The former CONFIG_LV_MEM_CUSTOM=y was an LVGL 8 option with no effect on
-# LVGL 9, which silently fell back to the built-in TLSF allocator and its
-# 64 KB static pool. Composite-layer draw buffers (forced by any translucent
-# widget) exceed that pool, and the draw dispatcher live-locks retrying the
-# failed allocation: taskLVGL spins, IDLE1 starves, task_wdt fires forever.
+# Route lv_malloc() to the C library heap (ESP heap incl. PSRAM). Do not remove.
+# LVGL 9's built-in TLSF allocator has a 64 KB static pool. Composite-layer draw
+# buffers (forced by any translucent widget) exceed it, and the draw dispatcher
+# live-locks retrying the failed allocation: taskLVGL spins, IDLE1 starves,
+# task_wdt fires forever. (The LVGL 8 option CONFIG_LV_MEM_CUSTOM has no effect.)
 CONFIG_LV_USE_CLIB_MALLOC=y
-# CONFIG_LV_MEMCPY_MEMSET_STD=y
-# CONFIG_LV_USE_ASSERT_NULL=y
-# CONFIG_LV_USE_ASSERT_MALLOC=y
-# CONFIG_LV_USE_PERF_MONITOR=y
-CONFIG_LV_COLOR_SCREEN_TRANSP=y
-
-CONFIG_LV_FONT_UNSCII_8=n
 CONFIG_LV_TXT_ENC_UTF8=y
-CONFIG_LV_FONT_DEFAULT_MONTSERRAT_14=y
 
+# Fonts
+CONFIG_LV_FONT_UNSCII_8=n
+CONFIG_LV_FONT_DEFAULT_MONTSERRAT_14=y
 CONFIG_LV_FONT_MONTSERRAT_8=y
 CONFIG_LV_FONT_MONTSERRAT_10=y
 CONFIG_LV_FONT_MONTSERRAT_12=y
@@ -84,5 +83,3 @@ CONFIG_LV_FONT_MONTSERRAT_42=y
 CONFIG_LV_FONT_MONTSERRAT_44=y
 CONFIG_LV_FONT_MONTSERRAT_46=y
 CONFIG_LV_FONT_MONTSERRAT_48=y
-
-CONFIG_LV_SPRINTF_USE_FLOAT=y
