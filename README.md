@@ -251,6 +251,18 @@ After `setmqtt` succeeds, the configuration is saved to NVS and the MQTT client 
 
 ## Configuration
 
+| What | Where |
+|------|-------|
+| ESP-IDF / LVGL / board options | `sdkconfig.defaults` (grouped by area; `sdkconfig` is generated and git-ignored) |
+| Default broker, MQTT topics, JSON keys, entity tables | `main/home_assistant_config.h` (`HA_*` macros) |
+| ESP-IDF component dependencies | `main/idf_component.yml` |
+| Flash layout | `partitions.csv` |
+| RP2040 sensor firmware and send interval | `rp2040/platformio.ini` |
+
+The `HA_DEFAULT_*` broker values only apply until a broker is saved from the touchscreen or with `setmqtt`; the saved config in NVS takes precedence. Topic names and JSON keys are product protocol: changing them breaks existing Home Assistant configs.
+
+The build compiles with warnings enabled and must stay warning-free: ESP-IDF promotes most `-Wall` warnings to errors.
+
 Run `idf.py menuconfig` to explore options. Notable locations:
 
 - **LVGL fonts** — `Component config → LVGL configuration → Font usage`
@@ -282,7 +294,7 @@ cmake -S sim -B sim/build && cmake --build sim/build -j4
 | Firmware (ESP32-S3) | `v1.1.0` |
 | Coprocessor (RP2040) | `v2.1.0` |
 | ESP-IDF | `v5.4.x` |
-| LVGL | `v9.x` (managed component) |
+| LVGL | `>= 9.6, < 10` (managed component) |
 | RP2040 build system | PlatformIO |
 
 <details>
