@@ -587,8 +587,6 @@ void RadioSetChannel( uint32_t freq )
 bool RadioIsChannelFree( uint32_t freq, uint32_t rxBandwidth, int16_t rssiThresh, uint32_t maxCarrierSenseTime )
 {
     bool     status           = true;
-    int16_t  rssi             = 0;
-    uint32_t carrierSenseTime = 0;
 
     RadioSetModem( MODEM_FSK );
 
@@ -1159,7 +1157,7 @@ void RadioStartCad( void )
 
 void RadioSetTxContinuousWave( uint32_t freq, int8_t power, uint16_t time )
 {
-    uint32_t timeout = ( uint32_t )time * 1000;
+    // uint32_t timeout = ( uint32_t )time * 1000;  // used only by the disabled TxTimeoutTimer below
 
     SX126xSetRfFrequency( freq );
     SX126xSetRfTxPower( power );

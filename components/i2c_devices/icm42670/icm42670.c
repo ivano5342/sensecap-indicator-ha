@@ -66,26 +66,26 @@ static void msg_printer(int level, const char *str, va_list ap)
 {
     static char out_str[2560]; /* static to limit stack usage */
     uint32_t idx = 0;
-#define LOG_COLOR_BLACK   "30"
-#define LOG_COLOR_RED     "31"
-#define LOG_COLOR_GREEN   "32"
-#define LOG_COLOR_BROWN   "33"
-#define LOG_COLOR_BLUE    "34"
-#define LOG_COLOR_PURPLE  "35"
-#define LOG_COLOR_CYAN    "36"
-#define LOG_COLOR(COLOR)  "\033[0;" COLOR "m"
-#define LOG_BOLD(COLOR)   "\033[1;" COLOR "m"
-#define LOG_RESET_COLOR   "\033[0m"
-#define LOG_COLOR_E       LOG_COLOR(LOG_COLOR_RED)
-#define LOG_COLOR_W       LOG_COLOR(LOG_COLOR_BROWN)
-#define LOG_COLOR_I       LOG_COLOR(LOG_COLOR_GREEN)
+#define ICM_LOG_COLOR_BLACK   "30"
+#define ICM_LOG_COLOR_RED     "31"
+#define ICM_LOG_COLOR_GREEN   "32"
+#define ICM_LOG_COLOR_BROWN   "33"
+#define ICM_LOG_COLOR_BLUE    "34"
+#define ICM_LOG_COLOR_PURPLE  "35"
+#define ICM_LOG_COLOR_CYAN    "36"
+#define ICM_LOG_COLOR(COLOR)  "\033[0;" COLOR "m"
+#define ICM_LOG_BOLD(COLOR)   "\033[1;" COLOR "m"
+#define ICM_LOG_RESET_COLOR   "\033[0m"
+#define ICM_LOG_COLOR_E       ICM_LOG_COLOR(ICM_LOG_COLOR_RED)
+#define ICM_LOG_COLOR_W       ICM_LOG_COLOR(ICM_LOG_COLOR_BROWN)
+#define ICM_LOG_COLOR_I       ICM_LOG_COLOR(ICM_LOG_COLOR_GREEN)
     const char *s[INV_MSG_LEVEL_MAX] = {
         "",    // INV_MSG_LEVEL_OFF
-        LOG_COLOR_E "[E]", // INV_MSG_LEVEL_ERROR
-        LOG_COLOR_W "[W]", // INV_MSG_LEVEL_WARNING
-        LOG_COLOR_I "[I]", // INV_MSG_LEVEL_INFO
-        LOG_COLOR_BLUE "[V]", // INV_MSG_LEVEL_VERBOSE
-        LOG_COLOR_BLUE "[D]", // INV_MSG_LEVEL_DEBUG
+        ICM_LOG_COLOR_E "[E]", // INV_MSG_LEVEL_ERROR
+        ICM_LOG_COLOR_W "[W]", // INV_MSG_LEVEL_WARNING
+        ICM_LOG_COLOR_I "[I]", // INV_MSG_LEVEL_INFO
+        ICM_LOG_COLOR_BLUE "[V]", // INV_MSG_LEVEL_VERBOSE
+        ICM_LOG_COLOR_BLUE "[D]", // INV_MSG_LEVEL_DEBUG
     };
     if (level >= INV_MSG_LEVEL_MAX) {
         printf("message error!\r\n");
@@ -100,7 +100,7 @@ static void msg_printer(int level, const char *str, va_list ap)
     if (idx >= (sizeof(out_str))) {
         return;
     }
-    idx += snprintf(&out_str[idx], sizeof(out_str) - idx, LOG_RESET_COLOR "\r\n");
+    idx += snprintf(&out_str[idx], sizeof(out_str) - idx, ICM_LOG_RESET_COLOR "\r\n");
     if (idx >= (sizeof(out_str))) {
         return;
     }

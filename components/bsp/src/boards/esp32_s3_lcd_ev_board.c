@@ -124,7 +124,6 @@ static const board_res_desc_t g_board_lcd_evb_res = {
     .LCD_IFACE =                (LCD_IFACE_RGB),
     .LCD_DISP_IC_STR =          "null",
     .LCD_FREQ =                 (CONFIG_LCD_EVB_SCREEN_FREQ * 1000 * 1000),
-    .BSP_INDEV_IS_TP =          (1),
 #endif
 
     .LCD_WIDTH =       (CONFIG_LCD_EVB_SCREEN_WIDTH),

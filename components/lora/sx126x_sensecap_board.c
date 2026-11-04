@@ -26,7 +26,7 @@ static spi_device_handle_t SpiHandle;
 static SemaphoreHandle_t   radio_mutex;
 
 
-static io_expander_ops_t *p_io_expander = NULL;
+static const io_expander_ops_t *p_io_expander = NULL;
 static QueueHandle_t gpio_evt_queue = NULL;
 static DioIrqHandler * g_dioIrq;
 
@@ -145,7 +145,7 @@ void bsp_sx126x_init(void)
 
     ESP_LOGI(TAG, "bsp sx126x init");
     
-    board_res_desc_t *brd = bsp_board_get_description();
+    const board_res_desc_t *brd = bsp_board_get_description();
 
     p_io_expander = brd->io_expander_ops;
 
