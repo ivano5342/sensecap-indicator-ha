@@ -1,12 +1,17 @@
 #include "wifi_view.h"
+#include "esp_err.h"
 #include "esp_log.h"
 #include "wifi_list_screen.h"
 #include "wifi_connect_screen.h"
+#include "wifi_scan_ui_state.h"
 #include "view_data.h"
+#include "view_event.h"
 #include "lv_port.h"
 #include "indicator_util.h"
 #include "nav.h"
 #include "sdkconfig.h"
+
+#include <inttypes.h>
 
 LV_IMAGE_DECLARE(ui_img_wifi_1_png);
 LV_IMAGE_DECLARE(ui_img_wifi_2_png);
@@ -16,6 +21,11 @@ LV_IMAGE_DECLARE(ui_img_wifi_disconet_png);
 static const char *TAG = "wifi-view";
 
 static wifi_list_screen_t    *s_list_screen    = NULL;
+/* The connect/details screen owns its own lifetime: show() allocates it and
+ * _dismiss() frees it exactly once. This handle is cleared in ONE place only,
+ * _connect_screen_dismissed(), which the screen fires from every dismiss path.
+ * Never NULL it by hand; to close the dialog call wifi_connect_screen_dismiss()
+ * and let the callback clear it. The `!= NULL` guards rely on this. */
 static wifi_connect_screen_t *s_connect_screen = NULL;
 static lv_obj_t              *s_wifi_modal     = NULL;
 static lv_obj_t              *s_wifi_spinner   = NULL;
@@ -24,25 +34,71 @@ static lv_obj_t              *s_wifi_icon      = NULL;
 static void _on_connected_tap(lv_event_t *e);
 static void _on_unconnected_tap(lv_event_t *e);
 
+/* Sole clearer of s_connect_screen; registered on the screen right after show. */
+static void _connect_screen_dismissed(void *user_data) {
+    (void)user_data;
+    s_connect_screen = NULL;
+}
+
 /* ── local wifi modal ───────────────────────────────────────────────── */
 
 static bool _wifi_modal_is_visible(void) {
     return s_wifi_modal && !lv_obj_has_flag(s_wifi_modal, LV_OBJ_FLAG_HIDDEN);
 }
 
-static bool s_discard_next_list = false;
-static bool s_wifi_scan_pending = false;
+static struct wifi_scan_ui_state s_wifi_scan_state;
+static lv_timer_t *s_wifi_scan_timeout_timer = NULL;
+static uint32_t s_wifi_scan_timeout_generation;
+
+#define WIFI_SCAN_TIMEOUT_MS 15000
+
+static void _wifi_scan_timeout_cb(lv_timer_t *timer) {
+    (void)timer;
+    s_wifi_scan_timeout_timer = NULL;
+    if(!wifi_scan_ui_timeout(
+            &s_wifi_scan_state, s_wifi_scan_timeout_generation)) {
+        ESP_LOGW(TAG, "ignore stale wifi scan timeout");
+        return;
+    }
+    ESP_LOGE(TAG, "wifi scan result timed out");
+    if(s_wifi_spinner) {
+        lv_obj_add_flag(s_wifi_spinner, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+static void _wifi_scan_timeout_cancel(void) {
+    if(s_wifi_scan_timeout_timer) {
+        lv_timer_delete(s_wifi_scan_timeout_timer);
+        s_wifi_scan_timeout_timer = NULL;
+    }
+}
+
+static bool _wifi_scan_timeout_start(uint32_t scan_generation) {
+    _wifi_scan_timeout_cancel();
+    s_wifi_scan_timeout_generation = scan_generation;
+    s_wifi_scan_timeout_timer =
+        lv_timer_create(_wifi_scan_timeout_cb, WIFI_SCAN_TIMEOUT_MS, NULL);
+    if(s_wifi_scan_timeout_timer) {
+        lv_timer_set_repeat_count(s_wifi_scan_timeout_timer, 1);
+        return true;
+    } else {
+        ESP_LOGE(TAG, "failed to create wifi scan timeout");
+        if(s_wifi_spinner) {
+            lv_obj_add_flag(s_wifi_spinner, LV_OBJ_FLAG_HIDDEN);
+        }
+        return false;
+    }
+}
 
 static void _hide_wifi_modal(void) {
     if(s_connect_screen) {
+        /* _dismiss() fires _connect_screen_dismissed(), which NULLs the handle
+         * before teardown — reentrancy-safe and clears itself. */
         wifi_connect_screen_dismiss(s_connect_screen);
-        s_connect_screen = NULL;
     }
     if(s_wifi_modal) {
         lv_obj_add_flag(s_wifi_modal, LV_OBJ_FLAG_HIDDEN);
-        if(s_wifi_scan_pending) {
-            s_discard_next_list = true;
-        }
+        wifi_scan_ui_hide(&s_wifi_scan_state);
     }
 }
 
@@ -114,17 +170,37 @@ static void _ensure_wifi_modal(void) {
     wifi_list_screen_set_item_callbacks(s_list_screen, _on_connected_tap, _on_unconnected_tap);
 }
 
+static bool _request_wifi_scan(void) {
+    uint32_t scan_generation = wifi_scan_ui_begin(&s_wifi_scan_state);
+    const struct view_data_wifi_scan_request request = {
+        .scan_generation = scan_generation,
+    };
+    wifi_list_screen_show_spinner(s_list_screen);
+    view_event_delivery_t delivery =
+        view_event_post_command(
+            VIEW_EVENT_WIFI_LIST_REQ, &request, sizeof(request));
+    if(delivery != VIEW_EVENT_DELIVERY_ENQUEUED) {
+        (void)wifi_scan_ui_complete(&s_wifi_scan_state, scan_generation);
+        ESP_LOGE(TAG, "wifi scan request rejected: delivery=%d", (int)delivery);
+        if(s_wifi_spinner) {
+            lv_obj_add_flag(s_wifi_spinner, LV_OBJ_FLAG_HIDDEN);
+        }
+        return false;
+    }
+    if(!_wifi_scan_timeout_start(scan_generation)) {
+        (void)wifi_scan_ui_complete(&s_wifi_scan_state, scan_generation);
+        return false;
+    }
+    return true;
+}
+
 static void _show_wifi_modal(void) {
     _ensure_wifi_modal();
     if(!s_wifi_modal) return;
 
     lv_obj_remove_flag(s_wifi_modal, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(s_wifi_modal);
-    wifi_list_screen_show_spinner(s_list_screen);
-
-    s_wifi_scan_pending = true;
-    esp_event_post_to(view_event_handle, VIEW_EVENT_BASE,
-                      VIEW_EVENT_WIFI_LIST_REQ, NULL, 0, portMAX_DELAY);
+    (void)_request_wifi_scan();
 }
 
 static void _on_wifi_icon_clicked(lv_event_t *e) {
@@ -167,6 +243,8 @@ static void _on_unconnected_tap(lv_event_t *e) {
     const char *ssid = wifi_list_screen_get_item_ssid(s_list_screen, btn);
     bool have_password = (lv_obj_get_child_cnt(btn) > 2);
     s_connect_screen = wifi_connect_screen_show(ssid, have_password);
+    wifi_connect_screen_set_dismiss_cb(
+        s_connect_screen, _connect_screen_dismissed, NULL);
 }
 
 static void _on_connected_tap(lv_event_t *e) {
@@ -177,6 +255,8 @@ static void _on_connected_tap(lv_event_t *e) {
     lv_obj_t *btn = lv_event_get_target_obj(e);
     const char *ssid = wifi_list_screen_get_item_ssid(s_list_screen, btn);
     s_connect_screen = wifi_details_screen_show(ssid);
+    wifi_connect_screen_set_dismiss_cb(
+        s_connect_screen, _connect_screen_dismissed, NULL);
 }
 
 /* ── connection result toast ─────────────────────────────────────────── */
@@ -209,8 +289,8 @@ static void _show_connect_result(struct view_data_wifi_connet_ret_msg *p_msg) {
 
 /* ── event handler ───────────────────────────────────────────────────── */
 
-static void _view_event_handler(void *handler_args, esp_event_base_t base,
-                                 int32_t id, void *event_data) {
+static void _view_event_handler(
+    void *handler_args, enum view_event_id id, const void *event_data) {
     switch(id) {
         case VIEW_EVENT_SCREEN_START: {
             uint8_t screen = *(uint8_t *)event_data;
@@ -251,16 +331,8 @@ static void _view_event_handler(void *handler_args, esp_event_base_t base,
             break;
 
         case VIEW_EVENT_WIFI_CONNECT:
-            /* Model picks this up to connect; view shows spinner. */
-            lv_port_sem_take();
-            _ensure_wifi_modal();
-            wifi_list_screen_show_spinner(s_list_screen);
-            s_connect_screen = NULL; /* already dismissed by connect_screen itself */
-            lv_port_sem_give();
-            break;
-
-        case VIEW_EVENT_WIFI_LIST_REQ:
-            /* Show spinner while scan is underway. */
+            /* Model picks this up to connect; view shows spinner. The dialog
+             * has already cleared s_connect_screen via its dismiss callback. */
             lv_port_sem_take();
             _ensure_wifi_modal();
             wifi_list_screen_show_spinner(s_list_screen);
@@ -269,19 +341,58 @@ static void _view_event_handler(void *handler_args, esp_event_base_t base,
 
         case VIEW_EVENT_WIFI_LIST: {
             ESP_LOGI(TAG, "event: VIEW_EVENT_WIFI_LIST");
-            s_wifi_scan_pending = false;
-            if(s_discard_next_list) {
-                s_discard_next_list = false;
-                ESP_LOGI(TAG, "discard stale scan result (user backed out)");
+            struct view_data_wifi_list *p_list =
+                (struct view_data_wifi_list *)event_data;
+            lv_port_sem_take();
+            enum wifi_scan_ui_completion completion =
+                wifi_scan_ui_complete(
+                    &s_wifi_scan_state, p_list->scan_generation);
+            if(completion == WIFI_SCAN_UI_COMPLETION_STALE) {
+                lv_port_sem_give();
+                ESP_LOGW(
+                    TAG,
+                    "ignore stale wifi scan result generation=%" PRIu32,
+                    p_list->scan_generation);
                 break;
             }
-            struct view_data_wifi_list *p_list = (struct view_data_wifi_list *)event_data;
-            lv_port_sem_take();
+            _wifi_scan_timeout_cancel();
+            if(completion == WIFI_SCAN_UI_COMPLETION_DISCARD) {
+                ESP_LOGI(TAG, "discard wifi scan result after modal close");
+                if(s_wifi_spinner) {
+                    lv_obj_add_flag(s_wifi_spinner, LV_OBJ_FLAG_HIDDEN);
+                }
+                lv_port_sem_give();
+                break;
+            }
             _ensure_wifi_modal();
             wifi_list_screen_update(s_list_screen, p_list);
             lv_port_sem_give();
             break;
         }
+        case VIEW_EVENT_WIFI_LIST_FAILED: {
+            const struct view_data_wifi_scan_failure *failure =
+                (const struct view_data_wifi_scan_failure *)event_data;
+            lv_port_sem_take();
+            enum wifi_scan_ui_completion completion =
+                wifi_scan_ui_complete(
+                    &s_wifi_scan_state, failure->scan_generation);
+            if(completion == WIFI_SCAN_UI_COMPLETION_STALE) {
+                lv_port_sem_give();
+                ESP_LOGW(
+                    TAG,
+                    "ignore stale wifi scan failure generation=%" PRIu32,
+                    failure->scan_generation);
+                break;
+            }
+            ESP_LOGE(TAG, "event: VIEW_EVENT_WIFI_LIST_FAILED");
+            _wifi_scan_timeout_cancel();
+            if(s_wifi_spinner) {
+                lv_obj_add_flag(s_wifi_spinner, LV_OBJ_FLAG_HIDDEN);
+            }
+            lv_port_sem_give();
+            break;
+        }
+
         case VIEW_EVENT_WIFI_CONNECT_RET: {
             struct view_data_wifi_connet_ret_msg *p_data =
                 (struct view_data_wifi_connet_ret_msg *)event_data;
@@ -291,15 +402,18 @@ static void _view_event_handler(void *handler_args, esp_event_base_t base,
             lv_port_sem_give();
             if(!modal_visible) break;
 
-            /* Refresh list then show result toast. */
-            esp_event_post_to(view_event_handle, VIEW_EVENT_BASE,
-                              VIEW_EVENT_WIFI_LIST_REQ, NULL, 0, portMAX_DELAY);
-
             lv_port_sem_take();
+            (void)_request_wifi_scan();
             _show_connect_result(p_data);
             lv_port_sem_give();
             break;
         }
+        case VIEW_EVENT_WIFI_CFG_DELETE:
+            lv_port_sem_take();
+            _ensure_wifi_modal();
+            (void)_request_wifi_scan();
+            lv_port_sem_give();
+            break;
         default:
             break;
     }
@@ -312,37 +426,22 @@ int indicator_wifi_view_init(void) {
     _ensure_wifi_status_icon();
     lv_port_sem_give();
 
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
-        view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_ST,
-        _view_event_handler, NULL, NULL));
-
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
-        view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_LIST,
-        _view_event_handler, NULL, NULL));
-
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
-        view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_SCREEN_START,
-        _view_event_handler, NULL, NULL));
-
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
-        view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_CONNECT_RET,
-        _view_event_handler, NULL, NULL));
-
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
-        view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_LIST_START,
-        _view_event_handler, NULL, NULL));
-
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
-        view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_LIST_REQ,
-        _view_event_handler, NULL, NULL));
-
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
-        view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_CONNECT,
-        _view_event_handler, NULL, NULL));
-
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
-        view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_CFG_DELETE,
-        _view_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(view_event_subscribe(
+        VIEW_EVENT_WIFI_ST, _view_event_handler, NULL) ? ESP_OK : ESP_FAIL);
+    ESP_ERROR_CHECK(view_event_subscribe(
+        VIEW_EVENT_WIFI_LIST, _view_event_handler, NULL) ? ESP_OK : ESP_FAIL);
+    ESP_ERROR_CHECK(view_event_subscribe(
+        VIEW_EVENT_WIFI_LIST_FAILED, _view_event_handler, NULL) ? ESP_OK : ESP_FAIL);
+    ESP_ERROR_CHECK(view_event_subscribe(
+        VIEW_EVENT_SCREEN_START, _view_event_handler, NULL) ? ESP_OK : ESP_FAIL);
+    ESP_ERROR_CHECK(view_event_subscribe(
+        VIEW_EVENT_WIFI_CONNECT_RET, _view_event_handler, NULL) ? ESP_OK : ESP_FAIL);
+    ESP_ERROR_CHECK(view_event_subscribe(
+        VIEW_EVENT_WIFI_LIST_START, _view_event_handler, NULL) ? ESP_OK : ESP_FAIL);
+    ESP_ERROR_CHECK(view_event_subscribe(
+        VIEW_EVENT_WIFI_CONNECT, _view_event_handler, NULL) ? ESP_OK : ESP_FAIL);
+    ESP_ERROR_CHECK(view_event_subscribe(
+        VIEW_EVENT_WIFI_CFG_DELETE, _view_event_handler, NULL) ? ESP_OK : ESP_FAIL);
 
     return 0;
 }

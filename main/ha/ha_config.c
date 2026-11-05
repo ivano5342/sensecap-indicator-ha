@@ -3,6 +3,7 @@
 #include "ha_config.h"
 #include "ha_mqtt.h"
 #include "view_data.h"
+#include "view_event.h"
 #include "home_assistant_config.h"
 #include "storage_nvs.h"
 #include "lv_port.h"
@@ -78,8 +79,11 @@ static void _on_broker_confirm(lv_event_t *e)
         return;
     }
 
-    esp_event_post_to(view_event_handle, VIEW_EVENT_BASE,
-                      VIEW_EVENT_MQTT_ADDR_CHANGED, NULL, 0, portMAX_DELAY);
+    view_event_delivery_t delivery =
+        view_event_post_command(VIEW_EVENT_MQTT_ADDR_CHANGED, NULL, 0);
+    if (delivery != VIEW_EVENT_DELIVERY_ENQUEUED) {
+        ESP_LOGE(TAG, "broker update rejected: delivery=%d", (int)delivery);
+    }
 }
 
 static void _on_ip_textarea_clicked(lv_event_t *e)
@@ -274,7 +278,8 @@ static void handle_mqtt_addr_change(const char *new_broker_ip)
     show_message_box("Broker IP updated successfully", lv_palette_main(LV_PALETTE_GREEN));
 }
 
-static void view_event_handler(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
+static void view_event_handler(
+    void *handler_args, enum view_event_id id, const void *event_data)
 {
     lv_port_sem_take();
 
@@ -313,41 +318,101 @@ static void view_event_handler(void *handler_args, esp_event_base_t base, int32_
     lv_port_sem_give();
 }
 
+bool ha_cfg_is_valid(const ha_cfg_interface *ha_cfg)
+{
+    if (ha_cfg == NULL || ha_cfg->broker_url[0] == '\0') {
+        return false;
+    }
+
+    return memchr(ha_cfg->broker_url, '\0', sizeof(ha_cfg->broker_url)) != NULL &&
+           memchr(ha_cfg->client_id, '\0', sizeof(ha_cfg->client_id)) != NULL &&
+           memchr(ha_cfg->username, '\0', sizeof(ha_cfg->username)) != NULL &&
+           memchr(ha_cfg->password, '\0', sizeof(ha_cfg->password)) != NULL;
+}
+
+esp_err_t ha_cfg_get_stored(ha_cfg_interface *ha_cfg)
+{
+    if (ha_cfg == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memset(ha_cfg, 0, sizeof(*ha_cfg));
+    size_t len = sizeof(*ha_cfg);
+    esp_err_t err = indicator_nvs_read(MQTT_HA_CFG_STORAGE, ha_cfg, &len);
+    if (err != ESP_OK) {
+        return err;
+    }
+    if (len != sizeof(*ha_cfg)) {
+        memset(ha_cfg, 0, sizeof(*ha_cfg));
+        return ESP_ERR_INVALID_SIZE;
+    }
+    if (!ha_cfg_is_valid(ha_cfg)) {
+        memset(ha_cfg, 0, sizeof(*ha_cfg));
+        return ESP_ERR_INVALID_STATE;
+    }
+    return ESP_OK;
+}
+
 esp_err_t ha_cfg_get(ha_cfg_interface *ha_cfg)
 {
-    int len = sizeof(ha_cfg_interface);
-    memset(ha_cfg, 0, sizeof(ha_cfg_interface));
-    esp_err_t err = indicator_nvs_read(MQTT_HA_CFG_STORAGE, ha_cfg, &len);
-    if (err == ESP_OK && len == sizeof(ha_cfg_interface)) {
-        ESP_LOGI(TAG, "mqtt broker cfg read successful");
-    } else {
-        if (err == ESP_ERR_NVS_NOT_FOUND) {
-            ESP_LOGI(TAG, "mqtt broker cfg not find");
-        } else {
-            ESP_LOGI(TAG, "mqtt broker cfg read err:%d", err);
-        }
-        strlcpy(ha_cfg->broker_url, CONFIG_BROKER_URL, sizeof(ha_cfg->broker_url));
-        strlcpy(ha_cfg->client_id, CONFIG_MQTT_CLIENT_ID, sizeof(ha_cfg->client_id));
-        strlcpy(ha_cfg->username, CONFIG_MQTT_USERNAME, sizeof(ha_cfg->username));
-        strlcpy(ha_cfg->password, CONFIG_MQTT_PASSWORD, sizeof(ha_cfg->password));
+    if (ha_cfg == NULL) {
+        return ESP_ERR_INVALID_ARG;
     }
+
+    esp_err_t err = ha_cfg_get_stored(ha_cfg);
+    if (err == ESP_OK) {
+        return ESP_OK;
+    }
+
+    memset(ha_cfg, 0, sizeof(*ha_cfg));
+    strlcpy(ha_cfg->broker_url, CONFIG_BROKER_URL, sizeof(ha_cfg->broker_url));
+    strlcpy(ha_cfg->client_id, CONFIG_MQTT_CLIENT_ID, sizeof(ha_cfg->client_id));
+    strlcpy(ha_cfg->username, CONFIG_MQTT_USERNAME, sizeof(ha_cfg->username));
+    strlcpy(ha_cfg->password, CONFIG_MQTT_PASSWORD, sizeof(ha_cfg->password));
     return err;
 }
 
 esp_err_t ha_cfg_set(ha_cfg_interface *cfg)
 {
+    if (!ha_cfg_is_valid(cfg)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
     esp_err_t err = indicator_nvs_write(MQTT_HA_CFG_STORAGE, cfg, sizeof(ha_cfg_interface));
     if (err != ESP_OK) {
-        ESP_LOGI(TAG, "ha cfg write err:%d", err);
-    } else {
-        ESP_LOGI(TAG, "ha cfg write successful");
+        ESP_LOGE(TAG, "ha cfg write err:%d", err);
     }
     return err;
 }
 
+bool ha_mqtt_enabled_get(void)
+{
+    uint8_t enabled = 0;
+    size_t len = sizeof(enabled);
+    esp_err_t err = indicator_nvs_read(MQTT_HA_ENABLED_STORAGE, &enabled, &len);
+    if (err == ESP_OK) {
+        return len == sizeof(enabled) && enabled == 1;
+    }
+    if (err != ESP_ERR_NVS_NOT_FOUND) {
+        return false;
+    }
+
+    ha_cfg_interface stored_cfg;
+    return ha_cfg_get_stored(&stored_cfg) == ESP_OK;
+}
+
+esp_err_t ha_mqtt_enabled_set(bool enabled)
+{
+    uint8_t value = enabled ? 1 : 0;
+    return indicator_nvs_write(MQTT_HA_ENABLED_STORAGE, &value, sizeof(value));
+}
+
 void ha_config_view_init(void)
 {
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_SCREEN_START, view_event_handler, NULL, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_MQTT_ADDR_CHANGED, view_event_handler, NULL, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_HA_ADDR_DISPLAY, view_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(view_event_subscribe(
+        VIEW_EVENT_SCREEN_START, view_event_handler, NULL) ? ESP_OK : ESP_FAIL);
+    ESP_ERROR_CHECK(view_event_subscribe(
+        VIEW_EVENT_MQTT_ADDR_CHANGED, view_event_handler, NULL) ? ESP_OK : ESP_FAIL);
+    ESP_ERROR_CHECK(view_event_subscribe(
+        VIEW_EVENT_HA_ADDR_DISPLAY, view_event_handler, NULL) ? ESP_OK : ESP_FAIL);
 }

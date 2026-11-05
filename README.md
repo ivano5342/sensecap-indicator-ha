@@ -1,6 +1,11 @@
-# SenseCAP Indicator — Home Assistant Firmware
+# SenseCAP Indicator Home Assistant Firmware
 
-Firmware that turns the [Seeed Studio SenseCAP Indicator](https://www.seeedstudio.com/SenseCAP-Indicator-D1-p-5643.html) into a Home Assistant companion panel. Connects to Wi-Fi, publishes built-in sensor data over MQTT, and renders on-screen controls that Home Assistant can drive both ways.
+Firmware for using the [Seeed Studio SenseCAP Indicator](https://www.seeedstudio.com/SenseCAP-Indicator-D1-p-5643.html)
+as a Home Assistant control panel. It connects over Wi-Fi and exposes shared
+sensor/control state through ESPHome Native API, optional MQTT, and the
+touchscreen.
+
+[![Firmware CI](https://github.com/Love4yzp/sensecap-indicator-ha/actions/workflows/firmware.yml/badge.svg)](https://github.com/Love4yzp/sensecap-indicator-ha/actions/workflows/firmware.yml)
 
 <figure class="third">
     <img align="left" src="./assets/Home Assistant Data.png" width="240"/>
@@ -9,246 +14,311 @@ Firmware that turns the [Seeed Studio SenseCAP Indicator](https://www.seeedstudi
     <img align="center" src="./assets/mqtt-address-panel.png" width="240"/>
 </figure>
 
-
----
-
-## Table of Contents
-
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Architecture](#architecture)
-- [MQTT Protocol](#mqtt-protocol)
-- [Home Assistant Setup](#home-assistant-setup)
-- [Build & Flash](#build--flash)
-- [Console Commands](#console-commands)
-- [Configuration](#configuration)
-- [Development](#development)
-- [Version](#version)
-
 ---
 
 ## Features
 
-- [x] MQTT broker integration (configurable address, port, client ID, username, password)
-- [x] Built-in sensor publishing: temperature, humidity, CO₂ (SCD41), tVOC (SGP40/SHT41)
-- [x] Home Assistant control widgets: 6 binary switches + 2 numeric sliders
-- [x] Wi-Fi and MQTT configuration from the touchscreen
-- [x] MQTT broker configuration from the serial console (`setmqtt`, `mqtthelp`)
-- [x] NVS-backed persistence for Wi-Fi credentials, MQTT config, switch state
-- [x] Display brightness and sleep-mode controls
-- [x] PC simulator for iterating on the UI without flashing hardware
-- [ ] REST API
-- [ ] WebSocket
+- Wi-Fi and optional MQTT setup from the touchscreen
+- Native API enabled by default for mDNS discovery or manual IP setup
+- Four temperature/humidity/CO₂/tVOC sensors, six switches, and two numbers
+- Shared state across touch, Native API, and the unchanged MQTT topics/payloads
+- Independent Native/MQTT enablement; local controls keep working offline
+- NVS-backed Wi-Fi, transport, and display settings; runtime entity state stays in RAM
+- Optional fixed Noise PSK for Native; plaintext mode has an explicit security risk
+- Serial commands for Native/MQTT configuration and diagnostics
+- Desktop simulator for UI work without hardware
 
----
+## Install
 
-## Quick Start
+### Use a release bundle
 
-**Prerequisites:** ESP-IDF v5.4.x installed with `IDF_PATH` exported in your shell (see [ESP-IDF setup](https://docs.espressif.com/projects/esp-idf/en/v5.4/esp32s3/get-started/)).
+New `v*` tag builds can include a checksummed `*-click-deploy.zip` bundle for
+both chips. Older releases may not have this asset.
+
+After extracting the bundle, connect the Indicator over USB-C and run:
 
 ```bash
-git clone <this-repo>
+# macOS or Linux
+./macos_linux/install.sh
+./macos_linux/flash_all.sh
+```
+
+```powershell
+# Windows PowerShell
+.\windows\flash_all.ps1
+```
+
+See [`click_deploy/README.md`](click_deploy/README.md) for port selection and
+single-chip flashing.
+
+### Build from source
+
+The ESP32-S3 build uses ESP-IDF v5.5.6. The app version comes from
+`git describe --tags --always --dirty --match 'v[0-9]*'`; an exact release-tag
+checkout uses that tag, while builds without Git metadata fall back to
+`0.0.0-dev`. The boot banner and Native device information share this version.
+
+```bash
+git clone https://github.com/Love4yzp/sensecap-indicator-ha.git
 cd sensecap-indicator-ha
-./dev build && ./dev flash
-./dev monitor          # Ctrl-] to exit
+
+export IDF_PATH=/path/to/esp-idf
+./dev build
+./dev flash
+./dev monitor
 ```
 
-After flashing, configure Wi-Fi and MQTT broker on the device, then continue to [Home Assistant Setup](#home-assistant-setup). Both can also be set from the serial console — see [Console Commands](#console-commands).
+On Windows, use `dev.bat build`, `dev.bat flash`, and `dev.bat monitor`.
 
----
+After flashing, configure Wi-Fi and add the device through Home Assistant's
+ESPHome integration. Native needs no broker; configure MQTT only if using that
+optional integration.
 
-## Architecture
+## Hardware split
 
-The SenseCAP Indicator is a dual-MCU device:
+| Chip | Responsibility |
+| --- | --- |
+| ESP32-S3 | Display, touch, Wi-Fi, Native API, MQTT, Home Assistant logic, and settings storage |
+| RP2040 | Built-in and Grove sensor acquisition |
 
-| MCU | Role | Key resources |
-|-----|------|---------------|
-| **ESP32-S3** | Display, touch, Wi-Fi, MQTT, Home Assistant logic | 8 MB flash, PSRAM @ 120 MHz OCT mode, 240 MHz CPU |
-| **RP2040** | Sensor acquisition on Grove ports | Reads CO₂, tVOC, temperature, humidity; relays to ESP32-S3 over UART |
+The RP2040 sends sensor data to the ESP32-S3 over a COBS-framed UART link at
+115200 baud. Sensor drivers stay on the RP2040.
 
-The two chips communicate over a COBS-framed UART link. All Grove sensor access goes through the RP2040; the ESP32-S3 never reads sensors directly.
+See [`main/ARCHITECTURE.md`](main/ARCHITECTURE.md) for module boundaries and
+runtime details.
 
-```
-┌─────────────────────────────────────────────────────┐
-│                     ESP32-S3                         │
-│                                                      │
-│  ┌──────────┐   ESP event   ┌──────────┐            │
-│  │  Model   │◄─────loop────►│   View   │            │
-│  │ (state,  │               │ (LVGL,   │            │
-│  │  NVS,    │               │  touch   │            │
-│  │  MQTT)   │               │  input)  │            │
-│  └────┬─────┘               └──────────┘            │
-│       │ UART / COBS                                  │
-└───────┼─────────────────────────────────────────────┘
-        │
-┌───────┼─────────────────────────────────────────────┐
-│       ▼          RP2040                              │
-│  Packet dispatch                                     │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐    │
-│  │   SCD41    │  │   SGP40    │  │   SHT41    │    │
-│  │   (CO₂)    │  │   (tVOC)   │  │ (temp/hum) │    │
-│  └────────────┘  └────────────┘  └────────────┘    │
-└─────────────────────────────────────────────────────┘
-```
+## Home Assistant: Native API and MQTT
 
-### Model / View pattern
+### Native API (default, no broker required)
 
-Each application domain has a paired `*_model.c` and `*_view.c`:
+On a fresh device, or whenever the `native-enabled` NVS key is absent, Native API
+defaults to enabled. No MQTT broker or MQTT YAML is required. An explicit
+`native disable` stores false and keeps Native off until re-enabled.
 
-- **Model** — owns state, NVS reads/writes, MQTT publish/subscribe, RP2040 packet parsing
-- **View** — owns LVGL object updates, touch callbacks, screen transitions
+When the device has an IP address, it listens on TCP port 6053 and advertises
+`_esphomelib._tcp.local.` over mDNS. Automatic discovery requires mDNS multicast
+traffic to reach Home Assistant. If multicast is blocked or the two endpoints
+are on different subnets, use manual IP setup instead. An mDNS failure does not
+disable the IP listener.
 
-Model and view communicate exclusively through the **ESP event loop** with typed event IDs and payloads defined in `main/view_data.h`. Neither side calls the other's functions directly.
+To add the device to Home Assistant:
 
-SquareLine Studio-generated files in `main/ui/` are treated as assets. Custom logic goes in `*_view.c` files, not in the generated screens.
+1. Configure Wi-Fi on the Indicator and note its IP address.
+2. In Home Assistant, open **Settings → Devices & services**.
+3. If the ESPHome device appears under discovered devices, select it. Otherwise
+   choose **Add Integration → ESPHome**.
+4. For manual setup, enter the Indicator's IP address or resolvable hostname and
+   port **6053**.
+5. If no PSK is configured, leave the encryption-key field blank. If a PSK is
+   configured, enter the same base64 key used on the Indicator.
 
-For per-domain locations and architecture rules, see [`AGENTS.md`](AGENTS.md).
+After onboarding, the ESPHome device page shows all 12 entities: Temp, Humidity,
+tVOC, and CO2 sensors; Switch1–Switch4 and Switch6–Switch7; and two numbers named
+Switch5 and Switch8 to preserve the legacy control mapping. Home Assistant does
+**not** automatically create dashboard cards for them; add the desired entities
+to a dashboard separately.
 
----
+Touch, Native, and MQTT commands share one authoritative in-memory state. A local
+command accepted by that state core remains effective while MQTT or HA is offline;
+transport failure does not roll it back. Controls cold-start at zero and sensors
+start as missing until data arrives. Runtime values are not persisted to NVS;
+reconnecting a transport synchronizes the latest snapshots rather than restoring
+old NVS state.
 
-## MQTT Protocol
+Validated on 2026-11-03 with **Home Assistant Container 2026.9.1** (using
+`aioesphomeapi` 46.2.0): manual-IP onboarding exposed all 12 entities and real-HA
+switch/number API control passed. Separate `aioesphomeapi` 46.6.0 client tests
+also passed. See the [current acceptance record](docs/stability/hardware-smoke-checklist.md#current-nativeha-acceptance-result-2026-11-03)
+for the tested hardware, Noise/MQTT results, and remaining untested items; HA's
+automatic-discovery UI and real-HA PSK onboarding are not claimed as verified.
 
-Three fixed topics carry all communication:
+### Native security and optional Noise PSK
 
-| Direction | Topic | Example payload |
-|-----------|-------|-----------------|
-| Device → HA (sensors) | `indicator/sensor` | `{"temp":"23.5","humidity":"45","co2":"450","tvoc":"100"}` |
-| HA → Device (commands) | `indicator/switch/set` | `{"switch1":1,"switch5":50}` |
-| Device → HA (state echo) | `indicator/switch/state` | `{"switch1":1,"switch2":0}` |
+**Without a PSK—the default—Native API is plaintext and unauthenticated.** Any
+client that can reach port 6053 can read states and send control commands. Use a
+trusted/isolated LAN or configure a unique, cryptographically random 32-byte PSK
+for each device. MQTT TLS does not protect Native API traffic.
 
-**Sensor keys:** `temp`, `humidity`, `co2`, `tvoc`
-
-**Control keys:**
-
-| Key | HA entity type | Range |
-|-----|---------------|-------|
-| `switch1`–`switch4`, `switch6`–`switch7` | Binary switch | `0` / `1` |
-| `switch5`, `switch8` | Numeric slider | integer value |
-
----
-
-## Home Assistant Setup
-
-1. **Install an MQTT broker** (Mosquitto is the simplest) and enable the MQTT integration in Home Assistant.
-
-2. **Point the Indicator at the broker** — from the device's MQTT screen, or via [`setmqtt`](#console-commands) over serial.
-
-3. **Add MQTT entities.** Append [`examples/homeassistant/mqtt-entities.yaml`](examples/homeassistant/mqtt-entities.yaml) to your `configuration.yaml` under the `mqtt:` key, then reload MQTT.
-
-4. **Add the dashboard.** Paste [`examples/homeassistant/dashboard.yaml`](examples/homeassistant/dashboard.yaml) into the Lovelace Raw Configuration Editor.
-
-<img src="./assets/Home Assistant Dashboard.png" />
-
-See also: [Seeed wiki — Home Assistant application guide](https://wiki.seeedstudio.com/SenseCAP_Indicator_Application_Home_Assistant/).
-
----
-
-## Build & Flash
-
-### ESP32-S3 (main firmware)
-
-**Prerequisites:** ESP-IDF v5.4.x with `IDF_PATH` exported.
+Generate a unique key on the host, then enter its base64 value through the
+serial console and in Home Assistant:
 
 ```bash
-./dev build          # idf.py build
-./dev flash          # auto-detects port
-./dev monitor        # Ctrl-] to exit
-./dev fullclean      # reset build directory
+openssl rand -base64 32
 ```
 
-Manual `idf.py` works the same way:
+```text
+native psk <base64-encoded-32-byte-random-key>
+native status
+```
+
+With a PSK configured, Native requires
+`Noise NNpsk0 (Curve25519, ChaChaPoly, SHA-256)`; plaintext connections are
+rejected and there is no silent downgrade. `native psk clear` deliberately
+returns Native to plaintext. The PSK is a fixed shared credential: dynamic
+provisioning, automatic rotation, per-client authorization, and flash/NVS
+encryption are not implemented. Status and command output do not print the
+secret, but the serial console itself is unauthenticated.
+
+### MQTT (optional, existing compatibility)
+
+The existing MQTT integration remains available alone or together with Native.
+To use **only MQTT**, disable Native with `native disable` before adding the MQTT
+entities. It uses the same three topics and payload formats:
+
+| Direction | Topic | Example |
+| --- | --- | --- |
+| Indicator to Home Assistant | `indicator/sensor` | `{"temp":"23.5","humidity":"45","co2":"450","tvoc":"100"}` |
+| Home Assistant to Indicator | `indicator/switch/set` | `{"switch1":1,"switch5":50}` |
+| Indicator state | `indicator/switch/state` | `{"switch1":1,"switch2":0}` |
+
+To connect through MQTT:
+
+1. Install an MQTT broker such as Mosquitto and enable the MQTT integration.
+2. Enter the broker details on the Indicator or use the `setmqtt` serial command.
+3. Add [`examples/homeassistant/mqtt-entities.yaml`](examples/homeassistant/mqtt-entities.yaml)
+   under the `mqtt:` section of `configuration.yaml`.
+4. Add [`examples/homeassistant/dashboard.yaml`](examples/homeassistant/dashboard.yaml)
+   through the Lovelace Raw Configuration Editor.
+
+MQTT Discovery is not implemented; the MQTT path still uses these manual YAML
+entities. These definitions and MQTT topics are not used by Native API. Native
+and MQTT have independent enable settings and lifecycles; changing one does not
+restart the other or clear current state. With no `mqtt-enabled` key, a fresh
+device enables MQTT only after a valid broker configuration has been stored;
+an explicit `mqtt disable` keeps it off.
+
+See the [Seeed Studio Home Assistant guide](https://wiki.seeedstudio.com/SenseCAP_Indicator_Application_Home_Assistant/)
+for the original MQTT setup walkthrough.
+
+## Build and flash
+
+The `./dev` command is the main entry point:
 
 ```bash
-. "$IDF_PATH/export.sh"
-idf.py build
-idf.py -p /dev/ttyUSB0 -b 460800 flash monitor
+./dev build              # clean ESP32-S3 build
+./dev build --no-clean   # incremental build
+./dev flash              # flash at 460800 baud
+./dev monitor
+./dev fullclean
 ```
 
-**Critical `sdkconfig.defaults` settings — do not remove:**
+If both USB endpoints are present, verify the port before passing `-p`. On the
+validated CH340 unit, `/dev/ttyUSB0` is the ESP32-S3 and `/dev/ttyACM0` is the
+RP2040.
 
-- `CONFIG_LV_USE_CLIB_MALLOC=y` — required; LVGL 9 must allocate from the ESP heap (PSRAM). Its built-in 64 KB TLSF pool cannot hold composite-layer draw buffers, and a failed layer allocation live-locks the render task (UI freeze + task_wdt). The old `CONFIG_LV_MEM_CUSTOM=y` was an LVGL 8 option and has no effect on LVGL 9.
-- PSRAM clock: 120 MHz OCT mode
-- CPU: 240 MHz, flash: QIO 120 MHz
+```bash
+./dev flash -p /dev/ttyUSB0
+```
 
-App partition is 7 MB (`partitions.csv`); total flash is 8 MB.
-
-### RP2040 (sensor coprocessor)
-
-Only needed when changing sensor protocols. Current version is **v2.1.0**. Built with PlatformIO (Arduino core by Earle Philhower).
+The RP2040 firmware only needs rebuilding when its sensor or UART code changes:
 
 ```bash
 ./dev rp2040 build
-./dev rp2040 upload      # device must appear as /dev/cu.usbmodem*
+./dev rp2040 upload
 ./dev rp2040 monitor
 ```
 
----
+## Serial commands
 
-## Console Commands
+Connect to the ESP32-S3 console at 115200 baud.
 
-Connect at the device's baud rate and use these commands:
+| Command | Purpose |
+| --- | --- |
+| `native status` | Show Native enable/IP/listener/client and redacted PSK status |
+| `native enable` / `native disable` | Enable or disable only Native API |
+| `native psk <32-byte-key-as-base64>` | Configure a fixed Noise PSK; command result/status stay redacted |
+| `native psk clear` | Clear the PSK and allow plaintext Native |
+| `mqtt status` | Show MQTT enable/config/client/connection status |
+| `mqtt enable` / `mqtt disable` | Enable or disable only MQTT |
+| `mqtthelp` | Show MQTT configuration and payload examples |
+| `haconfig` | Show saved MQTT settings; Native status is under `native status` |
+| `setmqtt -a <addr>` | Set the broker address |
+| `setmqtt -a <addr> -c <client-id> -u <user> -p <pass>` | Set the complete broker configuration |
+| `setmqtt --insecure` / `--secure` | Skip / re-enable TLS server verification (mqtts only) |
+| `setmqttca` / `setmqttca -c` | Paste a CA certificate for `mqtts://`, or clear it |
 
-| Command | Description |
-|---------|-------------|
-| `mqtthelp` | Print broker, topic, and payload examples |
-| `haconfig` | Print the current MQTT/HA configuration |
-| `setmqtt -a <addr>` | Set broker address (e.g., `mqtt://192.168.1.10:1883`) |
-| `setmqtt -a <addr> -c <client-id> -u <user> -p <pass>` | Full broker configuration |
-
-**Examples:**
+Examples:
 
 ```text
 setmqtt -a 192.168.1.10 -c indicator-01 -u mqtt_user -p mqtt_password
 setmqtt --addr mqtt://192.168.1.10:1883
-setmqtt --addr mqtt://broker.emqx.io
 ```
 
-After `setmqtt` succeeds, the configuration is saved to NVS and the MQTT client restarts automatically.
+The firmware saves a successful `setmqtt` update to NVS and reconfigures the MQTT
+client; connection starts only when MQTT is enabled and the device has an IP.
 
----
+### MQTT TLS (`mqtts://`)
 
-## Configuration
+Use an `mqtts://` broker URL to encrypt the MQTT connection (the port defaults
+to 8883). The touchscreen MQTT page stays plaintext-only; TLS is configured from
+the serial console.
 
-Run `idf.py menuconfig` to explore options. Notable locations:
+Verification order: a stored CA if present, otherwise the public CA bundle (for
+cloud brokers with real certificates). LAN brokers with a self-signed or private
+CA need `setmqttca`. `setmqtt --insecure` skips verification and is meant for
+quick testing only.
 
-- **LVGL fonts** — `Component config → LVGL configuration → Font usage`
-- **PSRAM clock** — `Components → ESP PSRAM → SPI RAM config` (requires "Make experimental features visible")
+With Home Assistant's Mosquitto add-on, set `certfile`/`keyfile`/`cafile` in the
+add-on configuration to expose a TLS listener on 8883, paste the CA into
+`setmqttca`, then point `setmqtt` at `mqtts://<HA-host>:8883`.
 
-To regenerate `sdkconfig` from defaults: delete it and run `./dev build`.
+### Security notes
 
----
+Wi-Fi/MQTT credentials and the Native PSK are stored in plaintext in NVS, and the
+serial console is unauthenticated—physical or USB access can expose them. Use a
+dedicated MQTT user with a limited ACL, protect console access, and use a unique
+Native PSK per device. Before reselling or disposing of the device, run
+`idf.py erase-flash` to wipe stored credentials and keys.
 
 ## Development
 
-**Code completion.** Install [clangd](https://github.com/clangd/clangd/releases) and the [clangd VS Code extension](https://marketplace.visualstudio.com/items?itemName=llvm-vs-code-extensions.vscode-clangd). After one successful build, `build/compile_commands.json` is generated and clangd uses it automatically for ESP-IDF-aware navigation.
-
-**PC simulator.** The `sim/` directory builds a desktop version of the UI using LVGL's SDL2 backend (macOS, 480×480 window matching the real LCD). Useful for iterating on screens, fonts, and layouts without flashing.
+Run the host checks before building or opening a pull request:
 
 ```bash
-cmake -S sim -B sim/build && cmake --build sim/build -j4
+python3 scripts/dev_check.py --skip-build
+```
+
+For separate client-level Native verification, install the pinned dependencies
+from `scripts/requirements-native-api-integration.txt` in an isolated environment,
+then run the host-side `aioesphomeapi` 46.6.0 client against a target endpoint:
+
+```bash
+python3 scripts/test_native_api_integration.py --host <device-ip>
+python3 scripts/test_native_api_integration.py --host <device-ip> \
+  --psk <base64-psk> --negative-tests
+```
+
+This script checks the API connection, entities/snapshots, commands, sensor push,
+and optional wrong-key/plaintext rejection. It does not itself validate mDNS or
+the Home Assistant UI. Keep its 46.6.0 client results distinct from the real-HA
+Container 2026.9.1 path. Both sets of completed checks—and the scenarios still
+untested—are linked from the [current acceptance record](docs/stability/hardware-smoke-checklist.md#current-nativeha-acceptance-result-2026-11-03).
+
+Build the desktop simulator with:
+
+```bash
+cmake -S sim -B sim/build
+cmake --build sim/build -j4
 ./sim/build/sensecap_sim
 ```
 
-**Architecture rules.** See [`AGENTS.md`](AGENTS.md) for module locations, boot sequence, and the model/view boundary rules that contributors (human and AI) must follow.
+GitHub CI runs host checks and clean builds for both chips on pull requests and
+pushes to `main`. After a successful `main` push, the configured auto-tag job
+chooses the next SemVer from the highest `vX.Y.Z` tag: breaking commits select
+major, otherwise `feat:` selects minor, and all other commits select patch. The
+annotated tag starts a separate tag workflow; the existing release job remains
+the only publisher of checksummed release packages. Existing `main` branch
+protection still requires all three checks. The GitHub-hosted auto-tag path has
+not yet been observed end to end. See [`docs/ci-cd.md`](docs/ci-cd.md) for the
+rules, manual tag dispatch, and rerun behavior.
 
----
-
-## Version
+## Versions
 
 | Component | Version |
-|-----------|---------|
-| Firmware (ESP32-S3) | `v1.1.0` |
-| Coprocessor (RP2040) | `v2.1.0` |
-| ESP-IDF | `v5.4.x` |
-| LVGL | `v9.x` (managed component) |
-| RP2040 build system | PlatformIO |
-
-<details>
-<summary>Changelog</summary>
-
-| Version | Notes |
-|---------|-------|
-| `v1.1.0` | Upgraded to ESP-IDF 5.4.x and LVGL 9; added `mqtthelp` console command; improved MQTT setup UX; unified build/flash tooling into `./dev` |
-| `v1.0.0` | Initial release (ESP-IDF 5.1 era, LVGL 8) |
-
-</details>
+| --- | --- |
+| ESP32-S3 firmware | Git-described app version; exact `vX.Y.Z` at a release tag |
+| RP2040 firmware | `v2.1.0` |
+| ESP-IDF | `v5.5.6` |
+| LVGL | `v9.6.0~1` |
+| esp_lvgl_port | `v2.9.0` |
+| RP2040 build system | PlatformIO `6.2.0` |
