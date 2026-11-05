@@ -2,6 +2,7 @@
 #include <string.h>
 #include "wifi_connect_screen.h"
 #include "view_data.h"
+#include "view_event.h"
 #include "esp_log.h"
 
 /* Re-declare only what this component needs from the asset set. */
@@ -14,14 +15,26 @@ struct wifi_connect_screen {
     lv_obj_t *kb;
     lv_obj_t *password_input;
     lv_obj_t *join_btn;
-    char       ssid[32];
+    char       ssid[33];
     bool       password_ready;
+    wifi_connect_dismiss_cb_t on_dismiss;
+    void      *dismiss_user_data;
 };
 
 /* ── internal helpers ─────────────────────────────────────────────────── */
 
 static void _dismiss(wifi_connect_screen_t *s) {
     if(!s) return;
+
+    /* Notify the owner FIRST and clear our hook so it fires exactly once.
+     * Doing this before teardown means a reentrant dismiss finds the owner's
+     * handle already NULL and bails, so there is no double free. The callback
+     * only drops the owner's reference; it must not free `s` or re-enter. */
+    wifi_connect_dismiss_cb_t cb = s->on_dismiss;
+    void *cb_data = s->dismiss_user_data;
+    s->on_dismiss = NULL;
+    if(cb) cb(cb_data);
+
     if(s->kb) {
         lv_obj_delete(s->kb);
         s->kb = NULL;
@@ -50,20 +63,23 @@ static void _on_join(lv_event_t *e) {
 
     struct view_data_wifi_config cfg;
     memset(&cfg, 0, sizeof(cfg));
-    strncpy(cfg.ssid, s->ssid, sizeof(cfg.ssid));
+    strlcpy(cfg.ssid, s->ssid, sizeof(cfg.ssid));
 
     if(s->kb != NULL && s->password_input != NULL) {
         cfg.have_password = true;
         const char *pw = lv_textarea_get_text(s->password_input);
-        strncpy((char *)cfg.password, pw, sizeof(cfg.password));
+        strlcpy((char *)cfg.password, pw, sizeof(cfg.password));
     } else {
         cfg.have_password = false;
     }
 
-    esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_CONNECT,
-                      &cfg, sizeof(cfg), portMAX_DELAY);
-
-    _dismiss(s);
+    view_event_delivery_t delivery =
+        view_event_post_command(VIEW_EVENT_WIFI_CONNECT, &cfg, sizeof(cfg));
+    if(delivery == VIEW_EVENT_DELIVERY_ENQUEUED) {
+        _dismiss(s);
+    } else {
+        ESP_LOGE(TAG, "join rejected: delivery=%d", (int)delivery);
+    }
 }
 
 static void _on_password_changed(lv_event_t *e) {
@@ -100,10 +116,12 @@ static void _on_delete(lv_event_t *e) {
     wifi_connect_screen_t *s = (wifi_connect_screen_t *)lv_event_get_user_data(e);
     if(lv_event_get_code(e) != LV_EVENT_CLICKED) return;
 
-    esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_CFG_DELETE,
-                      NULL, 0, portMAX_DELAY);
-    esp_event_post_to(view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_LIST_REQ,
-                      NULL, 0, portMAX_DELAY);
+    view_event_delivery_t delivery =
+        view_event_post_command(VIEW_EVENT_WIFI_CFG_DELETE, NULL, 0);
+    if(delivery != VIEW_EVENT_DELIVERY_ENQUEUED) {
+        ESP_LOGE(TAG, "delete rejected: delivery=%d", (int)delivery);
+        return;
+    }
 
     _dismiss(s);
 }
@@ -113,7 +131,7 @@ static void _on_delete(lv_event_t *e) {
 wifi_connect_screen_t *wifi_connect_screen_show(const char *ssid, bool have_password) {
     wifi_connect_screen_t *s = calloc(1, sizeof(wifi_connect_screen_t));
     if(!s) return NULL;
-    strncpy(s->ssid, ssid, sizeof(s->ssid));
+    strlcpy(s->ssid, ssid, sizeof(s->ssid));
 
     lv_obj_add_flag(lv_layer_top(), LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_bg_opa(lv_layer_top(), LV_OPA_COVER, 0);
@@ -189,7 +207,7 @@ wifi_connect_screen_t *wifi_connect_screen_show(const char *ssid, bool have_pass
 wifi_connect_screen_t *wifi_details_screen_show(const char *ssid) {
     wifi_connect_screen_t *s = calloc(1, sizeof(wifi_connect_screen_t));
     if(!s) return NULL;
-    strncpy(s->ssid, ssid, sizeof(s->ssid));
+    strlcpy(s->ssid, ssid, sizeof(s->ssid));
 
     lv_obj_add_flag(lv_layer_top(), LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_bg_opa(lv_layer_top(), LV_OPA_COVER, 0);
@@ -233,6 +251,14 @@ wifi_connect_screen_t *wifi_details_screen_show(const char *ssid) {
 
     ESP_LOGI(TAG, "details dialog open: %s", ssid);
     return s;
+}
+
+void wifi_connect_screen_set_dismiss_cb(wifi_connect_screen_t *s,
+                                        wifi_connect_dismiss_cb_t on_dismiss,
+                                        void *user_data) {
+    if(!s) return;
+    s->on_dismiss = on_dismiss;
+    s->dismiss_user_data = user_data;
 }
 
 void wifi_connect_screen_dismiss(wifi_connect_screen_t *s) {

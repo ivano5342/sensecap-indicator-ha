@@ -17,13 +17,29 @@ function(collect_sources source_var)
 endfunction()
 
 # Define a list of directories to include
-set(DIRECTORIES_TO_INCLUDE "util" "ha" "wifi" "sensor" "display" "settings" "rp2040" "btn" "mqtt" "storage" "cmd" "nav" "assets") # Recursively access folders | only modify here could be better
+set(DIRECTORIES_TO_INCLUDE "util" "ha" "wifi" "sensor" "display" "settings" "rp2040" "btn" "mqtt" "storage" "cmd" "nav" "assets" "view_event") # Recursively access folders | only modify here could be better
 
 # Call the custom function to collect the source files
 collect_sources(COLLECTED_SOURCES ${DIRECTORIES_TO_INCLUDE})
 
+# New deep modules should remain visible in the build manifest rather than
+# relying only on recursive discovery.
+list(FILTER COLLECTED_SOURCES EXCLUDE REGEX "(^|/)ha/(ha_switch_sync|entity_registry|entity_core|native_api|native_api_noise|native_api_protocol|native_api_server)\\.c$")
+set(EXPLICIT_DOMAIN_SOURCES
+  "ha/ha_switch_sync.c"
+  "ha/entity_registry.c"
+  "ha/entity_core.c"
+  "ha/native_api.c"
+  "ha/native_api_noise.c"
+  "ha/native_api_protocol.c"
+  "ha/native_api_server.c"
+  "lvgl_health/lvgl_health.c"
+  "lvgl_health/lvgl_health_state.c"
+)
+
 # Register the component
 idf_component_register(
-  SRCS "main.c" "lv_port.c" "indicator_model.c" "indicator_view.c" ${COLLECTED_SOURCES}
+  SRCS "main.c" "lv_port.c" "indicator_model.c" "indicator_view.c"
+       ${EXPLICIT_DOMAIN_SOURCES} ${COLLECTED_SOURCES}
   INCLUDE_DIRS "." ${DIRECTORIES_TO_INCLUDE}
 )
